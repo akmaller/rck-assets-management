@@ -109,6 +109,10 @@ code {
   font-size: clamp(1.45rem, 4vw, 2rem);
 }
 
+.login-card h2 {
+  margin: 0;
+}
+
 .brand-row {
   display: flex;
   align-items: center;
@@ -440,6 +444,10 @@ select:focus {
 .sidebar h1 {
   margin: 0 0 0.35rem;
   font-size: 1.4rem;
+}
+
+.sidebar .kicker {
+  margin: 0;
 }
 
 .menu {
