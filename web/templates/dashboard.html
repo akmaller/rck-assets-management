@@ -52,7 +52,7 @@
             <small class="company-label" id="footer-company-name">{{.AppName}}</small>
             <small id="sidebar-user">Akun: {{.Username}}</small>
           </div>
-          <button id="logout-btn" class="btn btn-outline">Logout</button>
+          <button id="logout-btn" class="btn btn-outline">Keluar</button>
         </div>
       </div>
     </aside>
@@ -91,14 +91,14 @@
             </select>
           </label>
           <label>
-            Barcode
+            <span class="label-row"><span class="label-text">Barcode</span><span class="label-optional">Opsional</span></span>
             <div class="input-row">
               <input type="text" name="barcode">
               <button type="button" class="btn btn-outline scan-btn" data-scan-target="quick">Scan</button>
             </div>
           </label>
           <label>
-            Foto Aset
+            <span class="label-row"><span class="label-text">Foto Aset</span><span class="label-optional">Opsional</span></span>
             <input class="file-input-hidden" type="file" name="photo" accept="image/*" capture="environment">
             <button type="button" class="btn btn-outline photo-btn" data-photo-target="quick">Ambil Foto</button>
           </label>
@@ -116,31 +116,31 @@
             <input type="text" name="company_name" required>
           </label>
           <label>
-            Email
+            <span class="label-row"><span class="label-text">Email</span><span class="label-optional">Opsional</span></span>
             <input type="email" name="email">
           </label>
           <label>
-            Telepon
+            <span class="label-row"><span class="label-text">Telepon</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="phone">
           </label>
           <label>
-            Website
+            <span class="label-row"><span class="label-text">Website</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="website">
           </label>
           <label>
-            Prefix ID Aset
+            <span class="label-row"><span class="label-text">Prefix ID Aset</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="asset_code_prefix" placeholder="RCK" maxlength="6">
           </label>
           <label>
-            Logo Utama
+            <span class="label-row"><span class="label-text">Logo Utama</span><span class="label-optional">Opsional</span></span>
             <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
           </label>
           <label>
-            Favicon
+            <span class="label-row"><span class="label-text">Favicon</span><span class="label-optional">Opsional</span></span>
             <input type="file" name="favicon" accept="image/png,image/jpeg,image/webp,image/svg+xml">
           </label>
           <label class="full-width">
-            Alamat
+            <span class="label-row"><span class="label-text">Alamat</span><span class="label-optional">Opsional</span></span>
             <textarea name="address" rows="3"></textarea>
           </label>
           <button type="submit" class="btn btn-primary">Simpan Identitas</button>
@@ -162,7 +162,7 @@
             <input type="text" name="full_name" required>
           </label>
           <label>
-            Password
+            <span class="label-row"><span class="label-text">Password</span><span class="label-optional">Opsional</span></span>
             <input type="password" name="password" placeholder="Isi saat membuat / ubah password">
           </label>
           <label>
@@ -204,11 +204,11 @@
 
         <form id="audit-filter" class="form-grid compact-grid" novalidate>
           <label>
-            User
+            <span class="label-row"><span class="label-text">User</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="user" placeholder="Cari username">
           </label>
           <label>
-            Aksi
+            <span class="label-row"><span class="label-text">Aksi</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="action" list="audit-actions" placeholder="login, create, update">
             <datalist id="audit-actions">
               <option value="login">
@@ -222,11 +222,11 @@
             </datalist>
           </label>
           <label>
-            Dari Tanggal
+            <span class="label-row"><span class="label-text">Dari Tanggal</span><span class="label-optional">Opsional</span></span>
             <input type="date" name="date_from">
           </label>
           <label>
-            Sampai Tanggal
+            <span class="label-row"><span class="label-text">Sampai Tanggal</span><span class="label-optional">Opsional</span></span>
             <input type="date" name="date_to">
           </label>
           <div class="inline-actions full-width">
@@ -273,7 +273,7 @@
             <input type="text" name="name" required>
           </label>
           <label>
-            Keterangan
+            <span class="label-row"><span class="label-text">Keterangan</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="description" placeholder="Keterangan jenis aset">
           </label>
           <div class="inline-actions full-width">
@@ -355,14 +355,14 @@
             </select>
           </label>
           <label>
-            Barcode
+            <span class="label-row"><span class="label-text">Barcode</span><span class="label-optional">Opsional</span></span>
             <div class="input-row">
               <input type="text" name="barcode">
               <button type="button" class="btn btn-outline scan-btn" data-scan-target="asset">Scan</button>
             </div>
           </label>
           <label>
-            Foto Aset
+            <span class="label-row"><span class="label-text">Foto Aset</span><span class="label-optional">Opsional</span></span>
             <input class="file-input-hidden" type="file" name="photo" accept="image/*" capture="environment">
             <button type="button" class="btn btn-outline photo-btn" data-photo-target="asset">Ambil Foto</button>
           </label>
@@ -374,21 +374,21 @@
 
         <form id="asset-filter" class="form-grid compact-grid filter-panel" novalidate>
           <label>
-            Dari Tanggal
+            <span class="label-row"><span class="label-text">Dari Tanggal</span><span class="label-optional">Opsional</span></span>
             <input type="date" name="date_from">
           </label>
           <label>
-            Sampai Tanggal
+            <span class="label-row"><span class="label-text">Sampai Tanggal</span><span class="label-optional">Opsional</span></span>
             <input type="date" name="date_to">
           </label>
           <label>
-            Jenis Aset
+            <span class="label-row"><span class="label-text">Jenis Aset</span><span class="label-optional">Opsional</span></span>
             <select name="type_id" id="asset-filter-type">
               <option value="">Semua jenis</option>
             </select>
           </label>
           <label>
-            Kondisi
+            <span class="label-row"><span class="label-text">Kondisi</span><span class="label-optional">Opsional</span></span>
             <select name="condition">
               <option value="">Semua kondisi</option>
               <option value="Baik">Baik</option>
@@ -458,11 +458,11 @@
 
         <form id="loan-filter" class="form-grid compact-grid filter-panel" novalidate>
           <label>
-            Dari Tanggal
+            <span class="label-row"><span class="label-text">Dari Tanggal</span><span class="label-optional">Opsional</span></span>
             <input type="date" name="date_from">
           </label>
           <label>
-            Sampai Tanggal
+            <span class="label-row"><span class="label-text">Sampai Tanggal</span><span class="label-optional">Opsional</span></span>
             <input type="date" name="date_to">
           </label>
           <div class="inline-actions full-width">
@@ -633,7 +633,7 @@
             <input type="text" name="borrower_name" required>
           </label>
           <label>
-            Kontak Peminjam (Opsional)
+            <span class="label-row"><span class="label-text">Kontak Peminjam</span><span class="label-optional">Opsional</span></span>
             <input type="text" name="borrower_contact" placeholder="Telepon / Email">
           </label>
           <label>
@@ -664,7 +664,7 @@
 
             <div class="loan-split-col">
               <label class="loan-notes-label">
-                Catatan (Opsional)
+                <span class="label-row"><span class="label-text">Catatan</span><span class="label-optional">Opsional</span></span>
                 <textarea name="notes" rows="2" placeholder="Keterangan tambahan"></textarea>
               </label>
             </div>

@@ -847,6 +847,12 @@
 
   const setupLogout = () => {
     els.logoutBtn?.addEventListener("click", async () => {
+      const proceed = await confirmDialog("Yakin ingin keluar?", {
+        title: "Konfirmasi Keluar",
+        confirmText: "Keluar",
+        cancelText: "Batal",
+      });
+      if (!proceed) return;
       try {
         await api("/api/auth/logout", { method: "POST" });
       } catch (_) {
