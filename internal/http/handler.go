@@ -1184,9 +1184,9 @@ func (h *Handler) CreateLoan(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	type request struct {
 		AssetIDs        []int64 `json:"asset_ids"`
 		BorrowerName    string  `json:"borrower_name"`
-		BorrowerContact string  `json:"borrower_contact"`
+		BorrowerContact *string `json:"borrower_contact"`
 		BorrowDate      string  `json:"borrow_date"`
-		Notes           string  `json:"notes"`
+		Notes           *string `json:"notes"`
 	}
 	var req request
 	if err := decodeJSON(r, &req); err != nil {
@@ -1194,7 +1194,13 @@ func (h *Handler) CreateLoan(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		return
 	}
 
-	input, ok := normalizeLoanPayload(req.AssetIDs, req.BorrowerName, req.BorrowerContact, req.BorrowDate, req.Notes)
+	input, ok := normalizeLoanPayload(
+		req.AssetIDs,
+		req.BorrowerName,
+		optionalString(req.BorrowerContact),
+		req.BorrowDate,
+		optionalString(req.Notes),
+	)
 	if !ok {
 		writeError(w, stdhttp.StatusBadRequest, "data peminjaman tidak lengkap")
 		return
@@ -1249,9 +1255,9 @@ func (h *Handler) UpdateLoan(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	type request struct {
 		AssetIDs        []int64 `json:"asset_ids"`
 		BorrowerName    string  `json:"borrower_name"`
-		BorrowerContact string  `json:"borrower_contact"`
+		BorrowerContact *string `json:"borrower_contact"`
 		BorrowDate      string  `json:"borrow_date"`
-		Notes           string  `json:"notes"`
+		Notes           *string `json:"notes"`
 	}
 	var req request
 	if err := decodeJSON(r, &req); err != nil {
@@ -1259,7 +1265,13 @@ func (h *Handler) UpdateLoan(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		return
 	}
 
-	input, ok := normalizeLoanPayload(req.AssetIDs, req.BorrowerName, req.BorrowerContact, req.BorrowDate, req.Notes)
+	input, ok := normalizeLoanPayload(
+		req.AssetIDs,
+		req.BorrowerName,
+		optionalString(req.BorrowerContact),
+		req.BorrowDate,
+		optionalString(req.Notes),
+	)
 	if !ok {
 		writeError(w, stdhttp.StatusBadRequest, "data peminjaman tidak lengkap")
 		return
@@ -1638,6 +1650,13 @@ func normalizeLoanPayload(assetIDs []int64, borrowerName, borrowerContact, borro
 		Notes:           notes,
 		AssetIDs:        cleanIDs,
 	}, true
+}
+
+func optionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 func sanitizeAssetPrefix(prefix string) string {
