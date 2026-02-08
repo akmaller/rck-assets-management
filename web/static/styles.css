@@ -119,10 +119,11 @@ code {
 .brand-logo {
   width: 54px;
   height: 54px;
-  border-radius: 16px;
-  object-fit: cover;
-  border: 1px solid var(--gray-300);
-  background: var(--white);
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+  object-fit: contain;
+  border: 0;
+  background: transparent;
 }
 
 .form-stack {
@@ -407,7 +408,8 @@ select:focus {
 .brand-logo.compact {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
 }
 
 .mobile-add {

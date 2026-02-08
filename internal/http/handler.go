@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/csv"
@@ -11,7 +12,7 @@ import (
 	"image"
 	_ "image/gif"
 	"image/jpeg"
-	_ "image/png"
+	"image/png"
 	"io"
 	"math"
 	stdhttp "net/http"
@@ -2637,24 +2638,69 @@ func saveResizedJPEG(diskPath string, img image.Image, maxWidth, maxHeight, qual
 	return jpeg.Encode(out, resized, &jpeg.Options{Quality: quality})
 }
 
-func (h *Handler) saveImage(file io.Reader, prefix string, maxWidth, maxHeight, quality int) (string, error) {
-	img, _, err := image.Decode(file)
-	if err != nil {
-		return "", errors.New("format gambar tidak didukung")
-	}
-
+func saveResizedPNG(diskPath string, img image.Image, maxWidth, maxHeight int) error {
 	resized := resizeToFit(img, maxWidth, maxHeight)
+	out, err := os.Create(diskPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+	return encoder.Encode(out, resized)
+}
+
+func (h *Handler) saveImage(file io.Reader, prefix string, maxWidth, maxHeight, quality int) (string, error) {
+	raw, err := io.ReadAll(io.LimitReader(file, 10<<20))
+	if err != nil {
+		return "", errors.New("gagal membaca file gambar")
+	}
+	if len(raw) == 0 {
+		return "", errors.New("file gambar kosong")
+	}
+	_ = quality
 
 	if err := os.MkdirAll(filepath.Join("data", "uploads"), 0o755); err != nil {
 		return "", errors.New("gagal menyiapkan folder upload")
 	}
 
-	filename := fmt.Sprintf("%s-%d.jpg", prefix, time.Now().UnixNano())
+	if isSVGContent(raw) {
+		filename := fmt.Sprintf("%s-%d.svg", prefix, time.Now().UnixNano())
+		diskPath := filepath.Join("data", "uploads", filename)
+		if err := os.WriteFile(diskPath, raw, 0o644); err != nil {
+			return "", errors.New("gagal menyimpan logo SVG")
+		}
+		return "/uploads/" + filename, nil
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return "", errors.New("format gambar tidak didukung")
+	}
+
+	filename := fmt.Sprintf("%s-%d.png", prefix, time.Now().UnixNano())
 	diskPath := filepath.Join("data", "uploads", filename)
-	if err := saveResizedJPEG(diskPath, resized, maxWidth, maxHeight, quality); err != nil {
+	if err := saveResizedPNG(diskPath, img, maxWidth, maxHeight); err != nil {
 		return "", errors.New("gagal menyimpan foto")
 	}
 	return "/uploads/" + filename, nil
+}
+
+func isSVGContent(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	contentType := strings.ToLower(strings.TrimSpace(stdhttp.DetectContentType(raw)))
+	if strings.Contains(contentType, "image/svg+xml") {
+		return true
+	}
+
+	sampleLen := len(raw)
+	if sampleLen > 4096 {
+		sampleLen = 4096
+	}
+	sample := strings.ToLower(string(bytes.TrimSpace(raw[:sampleLen])))
+	return strings.Contains(sample, "<svg")
 }
 
 func publicAssetURL(r *stdhttp.Request, path string) string {
