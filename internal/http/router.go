@@ -35,29 +35,19 @@ func NewRouter(handler *Handler) stdhttp.Handler {
 			secure.Get("/events", handler.EventsStream)
 
 			secure.Get("/asset-types", handler.ListAssetTypes)
-			secure.Post("/asset-types", handler.CreateAssetType)
-			secure.Post("/asset-types/import.csv", handler.ImportAssetTypesCSV)
-			secure.Put("/asset-types/{id}", handler.UpdateAssetType)
-			secure.Get("/asset-types/export.csv", handler.ExportAssetTypesCSV)
 
 			secure.Get("/assets", handler.ListAssets)
 			secure.Get("/assets/search", handler.SearchAssets)
 			secure.Get("/assets/next-id", handler.NextAssetCode)
-			secure.Post("/assets/import.csv", handler.ImportAssetsCSV)
-			secure.Get("/assets/export.csv", handler.ExportAssetsCSV)
 			secure.Post("/barcode/decode", handler.DecodeBarcodeFromPhoto)
 			secure.Post("/assets", handler.CreateAsset)
 			secure.Post("/assets/{id}/photo", handler.UploadAssetPhoto)
 			secure.Put("/assets/{id}", handler.UpdateAsset)
-			secure.Delete("/assets/{id}", handler.DeleteAsset)
 
 			secure.Get("/loans", handler.ListLoans)
-			secure.Post("/loans/import.csv", handler.ImportLoansCSV)
-			secure.Get("/loans/export.csv", handler.ExportLoansCSV)
 			secure.Post("/loans", handler.CreateLoan)
 			secure.Put("/loans/{id}", handler.UpdateLoan)
 			secure.Post("/loans/{id}/items/{itemId}/return", handler.ReturnLoan)
-			secure.Delete("/loans/{id}", handler.DeleteLoan)
 
 			secure.Group(func(admin chi.Router) {
 				admin.Use(handler.RequireAdmin)
@@ -65,7 +55,21 @@ func NewRouter(handler *Handler) stdhttp.Handler {
 				admin.Put("/settings/company", handler.UpdateCompanySetting)
 				admin.Post("/settings/company/logo", handler.UploadCompanyLogo)
 				admin.Post("/settings/company/favicon", handler.UploadCompanyFavicon)
+
+				admin.Post("/asset-types", handler.CreateAssetType)
+				admin.Post("/asset-types/import.csv", handler.ImportAssetTypesCSV)
+				admin.Put("/asset-types/{id}", handler.UpdateAssetType)
 				admin.Delete("/asset-types/{id}", handler.DeleteAssetType)
+				admin.Get("/asset-types/export.csv", handler.ExportAssetTypesCSV)
+
+				admin.Post("/assets/import.csv", handler.ImportAssetsCSV)
+				admin.Get("/assets/export.csv", handler.ExportAssetsCSV)
+				admin.Delete("/assets/{id}", handler.DeleteAsset)
+
+				admin.Post("/loans/import.csv", handler.ImportLoansCSV)
+				admin.Get("/loans/export.csv", handler.ExportLoansCSV)
+				admin.Delete("/loans/{id}", handler.DeleteLoan)
+
 				admin.Get("/users", handler.ListUsers)
 				admin.Post("/users", handler.CreateUser)
 				admin.Put("/users/{id}", handler.UpdateUser)

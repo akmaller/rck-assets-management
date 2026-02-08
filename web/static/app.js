@@ -419,6 +419,40 @@
     });
   };
 
+  const isAdmin = () => String(state.me?.role || "").toLowerCase() === "admin";
+
+  const setElementVisible = (el, visible) => {
+    if (!el) return;
+    el.style.display = visible ? "" : "none";
+  };
+
+  const applyRoleAccess = () => {
+    const admin = isAdmin();
+
+    const usersSection = document.getElementById("section-users");
+    const userMenuBtn = document.querySelector(".menu-link[data-section='users']");
+    const companySection = document.getElementById("section-company");
+    const companyMenuBtn = document.querySelector(".menu-link[data-section='company']");
+    const auditSection = document.getElementById("section-audit");
+    const auditMenuBtn = document.querySelector(".menu-link[data-section='audit']");
+
+    setElementVisible(usersSection, admin);
+    setElementVisible(userMenuBtn, admin);
+    setElementVisible(companySection, admin);
+    setElementVisible(companyMenuBtn, admin);
+    setElementVisible(auditSection, admin);
+    setElementVisible(auditMenuBtn, admin);
+
+    setElementVisible(els.typeForm, admin);
+    setElementVisible(els.exportTypes, admin);
+    setElementVisible(els.importTypes, admin);
+
+    setElementVisible(els.exportAssets, admin);
+    setElementVisible(els.importAssets, admin);
+    setElementVisible(els.exportLoans, admin);
+    setElementVisible(els.importLoans, admin);
+  };
+
   const loadMe = async () => {
     try {
       const data = await api("/api/auth/me");
@@ -437,34 +471,24 @@
       return;
     }
 
-    const usersSection = document.getElementById("section-users");
-    const userMenuBtn = document.querySelector(".menu-link[data-section='users']");
-    const companySection = document.getElementById("section-company");
-    const companyMenuBtn = document.querySelector(".menu-link[data-section='company']");
-    const auditSection = document.getElementById("section-audit");
-    const auditMenuBtn = document.querySelector(".menu-link[data-section='audit']");
-    if (state.me.role !== "admin") {
-      if (usersSection) usersSection.style.display = "none";
-      if (userMenuBtn) userMenuBtn.style.display = "none";
-      if (companySection) companySection.style.display = "none";
-      if (companyMenuBtn) companyMenuBtn.style.display = "none";
-      if (auditSection) auditSection.style.display = "none";
-      if (auditMenuBtn) auditMenuBtn.style.display = "none";
-    }
+    applyRoleAccess();
   };
 
   const loadCompany = async () => {
-    const data = await api("/api/settings/company");
-    state.company = data.setting;
+    const endpoint = isAdmin() ? "/api/settings/company" : "/api/settings/company/public";
+    const data = await api(endpoint);
+    state.company = data.setting || {};
 
     const form = els.companyForm;
-    form.company_name.value = state.company.company_name || "";
-    form.address.value = state.company.address || "";
-    form.email.value = state.company.email || "";
-    form.phone.value = state.company.phone || "";
-    form.website.value = state.company.website || "";
-    if (form.asset_code_prefix) {
-      form.asset_code_prefix.value = state.company.asset_code_prefix || "RCK";
+    if (isAdmin() && form) {
+      form.company_name.value = state.company.company_name || "";
+      form.address.value = state.company.address || "";
+      form.email.value = state.company.email || "";
+      form.phone.value = state.company.phone || "";
+      form.website.value = state.company.website || "";
+      if (form.asset_code_prefix) {
+        form.asset_code_prefix.value = state.company.asset_code_prefix || "RCK";
+      }
     }
     updateStats();
     applyBranding();
@@ -836,6 +860,10 @@
 
     const beginCompanyMediaFlow = async (type, file) => {
       if (!file) return;
+      if (!isAdmin()) {
+        setFlash("Hanya admin yang bisa mengubah logo/favicon.", "error");
+        return;
+      }
       if (!isAllowedCompanyMedia(file)) {
         setFlash("Format file tidak didukung. Gunakan PNG, JPG, WEBP, atau SVG.", "error");
         return;
@@ -964,6 +992,10 @@
   const setupCompanyForm = () => {
     els.companyForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!isAdmin()) {
+        setFlash("Hanya admin yang bisa mengubah identitas perusahaan.", "error");
+        return;
+      }
       const payload = {
         company_name: els.companyForm.company_name.value.trim(),
         address: els.companyForm.address.value.trim(),
@@ -1120,6 +1152,7 @@
 
   const renderTypes = () => {
     if (!els.typesTable) return;
+    const admin = isAdmin();
     if (state.assetTypes.length === 0) {
       els.typesTable.innerHTML = '<tr><td colspan="4">Belum ada jenis aset.</td></tr>';
       return;
@@ -1132,10 +1165,14 @@
             <td>${escapeHtml(type.description || "-")}</td>
             <td>${escapeHtml(String(Number(type.asset_count || 0)))}</td>
             <td>
-              <div class="row-actions">
+              ${
+                admin
+                  ? `<div class="row-actions">
                 <button class="tiny-btn" data-action="edit-type" data-id="${type.id}">Edit</button>
                 <button class="tiny-btn warn" data-action="delete-type" data-id="${type.id}">Hapus</button>
-              </div>
+              </div>`
+                  : '<span class="muted">-</span>'
+              }
             </td>
           </tr>
         `,
@@ -1352,6 +1389,10 @@
 
     els.typeForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!isAdmin()) {
+        setFlash("Hanya admin yang bisa mengubah jenis aset.", "error");
+        return;
+      }
       const id = typeIDInput?.value?.trim() || "";
       const payload = {
         name: els.typeForm.name.value.trim(),
@@ -1384,6 +1425,10 @@
       if (!type) return;
 
       if (button.dataset.action === "edit-type") {
+        if (!isAdmin()) {
+          setFlash("Hanya admin yang bisa mengubah jenis aset.", "error");
+          return;
+        }
         if (typeIDInput) {
           typeIDInput.value = String(type.id);
         }
@@ -1400,6 +1445,10 @@
       }
 
       if (button.dataset.action !== "delete-type") return;
+      if (!isAdmin()) {
+        setFlash("Hanya admin yang bisa menghapus jenis aset.", "error");
+        return;
+      }
 
       const ok = await confirmDialog(`Hapus jenis ${type.name}?`, {
         title: "Hapus Jenis Aset",
@@ -1418,6 +1467,7 @@
 
   const renderAssets = () => {
     if (!els.assetsTable) return;
+    const admin = isAdmin();
 
     if (state.assets.length === 0) {
       els.assetsTable.innerHTML = '<tr><td colspan="8">Belum ada aset.</td></tr>';
@@ -1452,11 +1502,15 @@
                     <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l8.06-8.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
                   </svg>
                 </button>
-                <button class="tiny-btn warn icon" data-action="delete-asset" data-id="${asset.id}" aria-label="Hapus aset" title="Hapus">
+                ${
+                  admin
+                    ? `<button class="tiny-btn warn icon" data-action="delete-asset" data-id="${asset.id}" aria-label="Hapus aset" title="Hapus">
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M6 7h12l-1 14H7L6 7zm4-3h4l1 2H9l1-2z"/>
                   </svg>
-                </button>
+                </button>`
+                    : ""
+                }
               </div>
             </td>
           </tr>
@@ -1654,6 +1708,10 @@
       }
 
       if (button.dataset.action === "delete-asset") {
+        if (!isAdmin()) {
+          setFlash("Hanya admin yang bisa menghapus aset.", "error");
+          return;
+        }
         const ok = await confirmDialog(`Hapus aset ${asset.asset_code}?`, {
           title: "Hapus Aset",
           confirmText: "Hapus",
@@ -1765,6 +1823,7 @@
 
   const renderLoans = () => {
     if (!els.loansTable) return;
+    const admin = isAdmin();
 
     if (state.loans.length === 0) {
       els.loansTable.innerHTML = '<tr><td colspan="6">Belum ada peminjaman.</td></tr>';
@@ -1785,7 +1844,7 @@
             <td>
               <div class="row-actions">
                 <button class="tiny-btn" data-action="edit-loan" data-id="${loan.id}">Edit</button>
-                <button class="tiny-btn warn" data-action="delete-loan" data-id="${loan.id}">Hapus</button>
+                ${admin ? `<button class="tiny-btn warn" data-action="delete-loan" data-id="${loan.id}">Hapus</button>` : ""}
               </div>
             </td>
           </tr>
@@ -1811,7 +1870,7 @@
                     ? ""
                     : `<button class="tiny-btn" data-action="return-loan" data-id="${loan.id}" data-item-id="${item.id}">Kembalikan</button>`
                 }
-                ${idx === 0 ? `<button class="tiny-btn warn" data-action="delete-loan" data-id="${loan.id}">Hapus</button>` : ""}
+                ${idx === 0 && admin ? `<button class="tiny-btn warn" data-action="delete-loan" data-id="${loan.id}">Hapus</button>` : ""}
               </div>
             </td>
           </tr>
@@ -1993,6 +2052,10 @@
       }
 
       if (button.dataset.action === "delete-loan") {
+        if (!isAdmin()) {
+          setFlash("Hanya admin yang bisa menghapus peminjaman.", "error");
+          return;
+        }
         const ok = await confirmDialog("Hapus data peminjaman ini?", {
           title: "Hapus Peminjaman",
           confirmText: "Hapus",
@@ -2284,6 +2347,10 @@
     };
 
     const openImportModal = (key) => {
+      if (!isAdmin()) {
+        setFlash("Hanya admin yang bisa import CSV.", "error");
+        return;
+      }
       const config = importConfigs[key];
       if (!config) return;
       activeImportConfig = config;
@@ -2347,6 +2414,10 @@
       });
 
     const runImport = async () => {
+      if (!isAdmin()) {
+        setFlash("Hanya admin yang bisa import CSV.", "error");
+        return;
+      }
       if (!activeImportConfig) return;
       const file = els.importFileInput?.files?.[0];
       if (!file) {
@@ -2419,16 +2490,28 @@
   const setupExport = () => {
     if (els.exportAssets) {
       els.exportAssets.addEventListener("click", () => {
+        if (!isAdmin()) {
+          setFlash("Hanya admin yang bisa export CSV.", "error");
+          return;
+        }
         window.location.href = "/api/assets/export.csv";
       });
     }
     if (els.exportTypes) {
       els.exportTypes.addEventListener("click", () => {
+        if (!isAdmin()) {
+          setFlash("Hanya admin yang bisa export CSV.", "error");
+          return;
+        }
         window.location.href = "/api/asset-types/export.csv";
       });
     }
     if (els.exportLoans) {
       els.exportLoans.addEventListener("click", () => {
+        if (!isAdmin()) {
+          setFlash("Hanya admin yang bisa export CSV.", "error");
+          return;
+        }
         window.location.href = "/api/loans/export.csv";
       });
     }
