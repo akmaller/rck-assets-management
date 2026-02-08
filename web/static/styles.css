@@ -170,15 +170,22 @@ label {
   position: fixed;
   inset: 0;
   background: rgba(17, 17, 17, 0.55);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   z-index: 60;
   padding: 1rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
 }
 
 .scan-modal.active {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
 }
 
 .scan-card {
@@ -188,6 +195,12 @@ label {
   padding: 1rem;
   border: 1px solid var(--gray-300);
   box-shadow: var(--shadow);
+  transform: translateY(10px) scale(0.98);
+  transition: transform 0.2s ease;
+}
+
+.scan-modal.active .scan-card {
+  transform: translateY(0) scale(1);
 }
 
 .scan-header {
@@ -220,6 +233,17 @@ label {
   border-radius: 12px;
   border: 1px solid var(--gray-300);
   background: #0f0f0f;
+}
+
+.scan-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.scan-actions .btn {
+  flex: 1 1 140px;
 }
 
 input,
@@ -290,6 +314,7 @@ select:focus {
 
 .dashboard-body {
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     linear-gradient(140deg, #f8f8f4 0%, #ecece8 35%, #f7f7f4 100%),
     radial-gradient(circle at right, rgba(153, 0, 0, 0.07), transparent 40%);
@@ -299,6 +324,7 @@ select:focus {
   display: grid;
   grid-template-columns: 290px 1fr;
   min-height: 100vh;
+  min-width: 0;
 }
 
 @media (min-width: 981px) {
@@ -324,12 +350,18 @@ select:focus {
 .mobile-topbar {
   display: none;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 0.8rem;
   padding: 0.55rem 0.85rem;
   border-bottom: 1px solid var(--gray-300);
   background: rgba(255, 255, 255, 0.92);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  height: 58px;
+  box-sizing: border-box;
   z-index: 20;
   backdrop-filter: blur(6px);
 }
@@ -364,6 +396,7 @@ select:focus {
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   border-radius: 12px;
+  white-space: nowrap;
 }
 
 .drawer-backdrop {
@@ -452,6 +485,7 @@ select:focus {
 
 .content {
   padding: 1.4rem;
+  min-width: 0;
 }
 
 .page-title {
@@ -498,9 +532,33 @@ select:focus {
 }
 
 .flash {
-  min-height: 1.35rem;
-  font-size: 0.92rem;
-  margin-bottom: 0.7rem;
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 70;
+  min-width: 200px;
+  max-width: min(320px, 88vw);
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  background: var(--white);
+  border: 1px solid var(--gray-300);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.flash.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.flash.info {
+  color: #1f3b53;
+  border-color: rgba(26, 60, 92, 0.2);
+  background: #f3f7fb;
 }
 
 .panel {
@@ -636,6 +694,7 @@ select:focus {
   border: 1px solid var(--gray-300);
   border-radius: 12px;
   background: var(--white);
+  max-width: 100%;
 }
 
 .table-pager {
@@ -693,6 +752,10 @@ td .row-actions {
   background: #f1f1ed;
 }
 
+.thumb-clickable {
+  cursor: zoom-in;
+}
+
 .tiny-btn {
   border: 1px solid var(--gray-300);
   border-radius: 8px;
@@ -700,6 +763,20 @@ td .row-actions {
   padding: 0.35rem 0.45rem;
   background: var(--white);
   cursor: pointer;
+}
+
+.tiny-btn.icon {
+  padding: 0.3rem;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tiny-btn.icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .tiny-btn.warn {
@@ -879,7 +956,32 @@ td .row-actions {
   }
 
   .content {
-    padding-top: 0.7rem;
+    padding: calc(0.7rem + 58px) 0 0;
+    overflow-x: hidden;
+  }
+
+  .panel {
+    min-width: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
+  }
+
+  .table-wrap table {
+    width: max-content;
+    min-width: 720px;
+  }
+
+  .table-wrap,
+  .form-panel,
+  .filter-panel {
+    border-radius: 0;
+  }
+
+  .table-wrap {
+    border-left: 0;
+    border-right: 0;
   }
 }
 
@@ -910,5 +1012,134 @@ td .row-actions {
 
   .loan-asset-row {
     grid-template-columns: 1fr;
+  }
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 17, 17, 0.45);
+  z-index: 58;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 59;
+  padding: 1rem;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.modal[hidden],
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.modal-backdrop.show {
+  opacity: 1;
+}
+
+.modal-card {
+  width: min(420px, 94vw);
+  background: var(--white);
+  border-radius: 18px;
+  border: 1px solid var(--gray-300);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.modal-body {
+  color: var(--gray-900);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.asset-photo-modal {
+  z-index: 61;
+}
+
+#asset-photo-backdrop {
+  z-index: 60;
+}
+
+.asset-photo-card {
+  width: min(70vw, 1100px);
+  max-height: 80vh;
+  background: var(--white);
+  border-radius: 18px;
+  border: 1px solid var(--gray-300);
+  box-shadow: var(--shadow);
+  padding: 0.75rem;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.6rem;
+}
+
+.asset-photo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.asset-photo-preview {
+  width: 100%;
+  height: 100%;
+  max-height: calc(80vh - 60px);
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--gray-300);
+  background: #111;
+}
+
+.asset-photo-close {
+  width: 34px;
+  height: 34px;
+}
+
+.asset-photo-close span {
+  width: 16px;
+}
+
+.asset-photo-close span:first-child {
+  transform: rotate(45deg);
+}
+
+.asset-photo-close span:last-child {
+  transform: rotate(-45deg);
+  margin-top: -7px;
+}
+
+@media (max-width: 980px) {
+  .asset-photo-card {
+    width: min(94vw, 720px);
+    max-height: 85vh;
+  }
+
+  .asset-photo-preview {
+    max-height: calc(85vh - 56px);
   }
 }

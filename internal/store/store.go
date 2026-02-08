@@ -74,19 +74,20 @@ type UpdateUserInput struct {
 }
 
 type Asset struct {
-	ID            int64     `db:"id" json:"id"`
-	AssetCode     string    `db:"asset_code" json:"asset_code"`
-	Name          string    `db:"name" json:"name"`
-	PurchaseDate  string    `db:"purchase_date" json:"purchase_date"`
-	Condition     string    `db:"asset_condition" json:"condition"`
-	AssetTypeID   int64     `db:"asset_type_id" json:"asset_type_id"`
-	AssetType     string    `db:"asset_type_name" json:"asset_type_name"`
-	AssetSequence int64     `db:"asset_sequence" json:"asset_sequence"`
-	Barcode       string    `db:"barcode" json:"barcode"`
-	PhotoPath     string    `db:"photo_path" json:"photo_url"`
-	LoanStatus    string    `db:"loan_status" json:"loan_status"`
-	CreatedAt     time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
+	ID             int64     `db:"id" json:"id"`
+	AssetCode      string    `db:"asset_code" json:"asset_code"`
+	Name           string    `db:"name" json:"name"`
+	PurchaseDate   string    `db:"purchase_date" json:"purchase_date"`
+	Condition      string    `db:"asset_condition" json:"condition"`
+	AssetTypeID    int64     `db:"asset_type_id" json:"asset_type_id"`
+	AssetType      string    `db:"asset_type_name" json:"asset_type_name"`
+	AssetSequence  int64     `db:"asset_sequence" json:"asset_sequence"`
+	Barcode        string    `db:"barcode" json:"barcode"`
+	PhotoPath      string    `db:"photo_path" json:"photo_url"`
+	PhotoThumbPath string    `db:"photo_thumb_path" json:"photo_thumb_url"`
+	LoanStatus     string    `db:"loan_status" json:"loan_status"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
 }
 
 type AssetFilter struct {
@@ -353,7 +354,7 @@ func (s *Store) ListAssets() ([]Asset, error) {
 	query := `
 		SELECT a.id, a.asset_code, a.name, a.purchase_date, a.asset_condition, a.asset_type_id, a.asset_sequence,
 		       COALESCE(t.name, '') AS asset_type_name,
-		       a.barcode, a.photo_path,
+		       a.barcode, a.photo_path, a.photo_thumb_path,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1 FROM loan_items li
@@ -381,7 +382,7 @@ func (s *Store) SearchAssets(term string, limit int) ([]Asset, error) {
 	query := `
 		SELECT a.id, a.asset_code, a.name, a.asset_type_id,
 		       COALESCE(t.name, '') AS asset_type_name,
-		       a.purchase_date, a.asset_condition, a.barcode, a.photo_path,
+		       a.purchase_date, a.asset_condition, a.barcode, a.photo_path, a.photo_thumb_path,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1 FROM loan_items li
@@ -417,7 +418,7 @@ func (s *Store) ListAssetsPage(filter AssetFilter) ([]Asset, bool, int64, error)
 	query := `
 		SELECT a.id, a.asset_code, a.name, a.purchase_date, a.asset_condition, a.asset_type_id, a.asset_sequence,
 		       COALESCE(t.name, '') AS asset_type_name,
-		       a.barcode, a.photo_path,
+		       a.barcode, a.photo_path, a.photo_thumb_path,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1 FROM loan_items li
@@ -481,7 +482,7 @@ func (s *Store) GetAssetByID(id int64) (Asset, error) {
 	query := s.db.Rebind(`
 		SELECT a.id, a.asset_code, a.name, a.purchase_date, a.asset_condition, a.asset_type_id, a.asset_sequence,
 		       COALESCE(t.name, '') AS asset_type_name,
-		       a.barcode, a.photo_path,
+		       a.barcode, a.photo_path, a.photo_thumb_path,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1 FROM loan_items li
@@ -515,7 +516,7 @@ func (s *Store) CreateAsset(input CreateAssetInput) (Asset, error) {
 	lookup := s.db.Rebind(`
 		SELECT a.id, a.asset_code, a.name, a.purchase_date, a.asset_condition, a.asset_type_id, a.asset_sequence,
 		       COALESCE(t.name, '') AS asset_type_name,
-		       a.barcode, a.photo_path,
+		       a.barcode, a.photo_path, a.photo_thumb_path,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1 FROM loan_items li
@@ -578,13 +579,13 @@ func (s *Store) DeleteAsset(id int64) error {
 	return nil
 }
 
-func (s *Store) UpdateAssetPhoto(id int64, path string) (Asset, error) {
+func (s *Store) UpdateAssetPhoto(id int64, fullPath, thumbPath string) (Asset, error) {
 	query := s.db.Rebind(`
 		UPDATE assets
-		SET photo_path = ?, updated_at = CURRENT_TIMESTAMP
+		SET photo_path = ?, photo_thumb_path = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`)
-	res, err := s.db.Exec(query, path, id)
+	res, err := s.db.Exec(query, fullPath, thumbPath, id)
 	if err != nil {
 		return Asset{}, err
 	}

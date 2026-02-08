@@ -41,6 +41,7 @@ func NewRouter(handler *Handler) stdhttp.Handler {
 			secure.Get("/assets/search", handler.SearchAssets)
 			secure.Get("/assets/next-id", handler.NextAssetCode)
 			secure.Get("/assets/export.csv", handler.ExportAssetsCSV)
+			secure.Post("/barcode/decode", handler.DecodeBarcodeFromPhoto)
 			secure.Post("/assets", handler.CreateAsset)
 			secure.Post("/assets/{id}/photo", handler.UploadAssetPhoto)
 			secure.Put("/assets/{id}", handler.UpdateAsset)

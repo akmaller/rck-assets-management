@@ -28,6 +28,9 @@ func Migrate(db *sqlx.DB, driver string) error {
 	if err := ensureAssetPhotoColumn(db, driver); err != nil {
 		return err
 	}
+	if err := ensureAssetPhotoThumbColumn(db, driver); err != nil {
+		return err
+	}
 	if err := ensureCompanyMediaColumns(db, driver); err != nil {
 		return err
 	}
@@ -119,6 +122,7 @@ func schemaStatements(driver string) ([]string, error) {
 				asset_sequence INTEGER NOT NULL DEFAULT 0,
 				barcode TEXT NOT NULL UNIQUE,
 				photo_path TEXT NOT NULL DEFAULT '',
+				photo_thumb_path TEXT NOT NULL DEFAULT '',
 				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
@@ -183,6 +187,7 @@ func schemaStatements(driver string) ([]string, error) {
 				asset_sequence BIGINT NOT NULL DEFAULT 0,
 				barcode TEXT NOT NULL UNIQUE,
 				photo_path TEXT NOT NULL DEFAULT '',
+				photo_thumb_path TEXT NOT NULL DEFAULT '',
 				created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
@@ -247,6 +252,7 @@ func schemaStatements(driver string) ([]string, error) {
 				asset_sequence BIGINT NOT NULL DEFAULT 0,
 				barcode VARCHAR(120) NOT NULL UNIQUE,
 				photo_path VARCHAR(255) NOT NULL DEFAULT '',
+				photo_thumb_path VARCHAR(255) NOT NULL DEFAULT '',
 				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 			);`,
@@ -288,6 +294,28 @@ func ensureAssetPhotoColumn(db *sqlx.DB, driver string) error {
 		stmt = `ALTER TABLE assets ADD COLUMN photo_path TEXT NOT NULL DEFAULT ''`
 	case "mysql":
 		stmt = `ALTER TABLE assets ADD COLUMN photo_path VARCHAR(255) NOT NULL DEFAULT ''`
+	default:
+		return fmt.Errorf("driver tidak didukung: %s", driver)
+	}
+
+	if _, err := db.Exec(stmt); err != nil {
+		if isDuplicateColumnError(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func ensureAssetPhotoThumbColumn(db *sqlx.DB, driver string) error {
+	var stmt string
+	switch driver {
+	case "sqlite":
+		stmt = `ALTER TABLE assets ADD COLUMN photo_thumb_path TEXT NOT NULL DEFAULT ''`
+	case "postgres":
+		stmt = `ALTER TABLE assets ADD COLUMN photo_thumb_path TEXT NOT NULL DEFAULT ''`
+	case "mysql":
+		stmt = `ALTER TABLE assets ADD COLUMN photo_thumb_path VARCHAR(255) NOT NULL DEFAULT ''`
 	default:
 		return fmt.Errorf("driver tidak didukung: %s", driver)
 	}

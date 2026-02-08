@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/makiuchi-d/gozxing"
+	"github.com/makiuchi-d/gozxing/oned"
+	"github.com/makiuchi-d/gozxing/qrcode"
 	"golang.org/x/image/draw"
 
 	"rck-assets/internal/auth"
@@ -1003,13 +1006,13 @@ func (h *Handler) UploadAssetPhoto(w stdhttp.ResponseWriter, r *stdhttp.Request)
 	}
 	defer file.Close()
 
-	publicPath, err := h.saveImage(file, fmt.Sprintf("asset-%d", assetID), 1920, 1080, 82)
+	fullPath, thumbPath, err := h.saveAssetImageVariants(file, fmt.Sprintf("asset-%d", assetID))
 	if err != nil {
 		writeError(w, stdhttp.StatusBadRequest, err.Error())
 		return
 	}
 
-	asset, err := h.store.UpdateAssetPhoto(assetID, publicPath)
+	asset, err := h.store.UpdateAssetPhoto(assetID, fullPath, thumbPath)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, stdhttp.StatusNotFound, "aset tidak ditemukan")
@@ -1027,7 +1030,74 @@ func (h *Handler) UploadAssetPhoto(w stdhttp.ResponseWriter, r *stdhttp.Request)
 	h.notify("assets")
 }
 
-func (h *Handler) ExportAssetsCSV(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+func (h *Handler) DecodeBarcodeFromPhoto(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	r.Body = stdhttp.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeError(w, stdhttp.StatusBadRequest, "file terlalu besar atau form tidak valid")
+		return
+	}
+
+	file, _, err := r.FormFile("photo")
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, "file foto tidak ditemukan")
+		return
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, "format gambar tidak didukung")
+		return
+	}
+
+	value, format, err := decodeBarcodeText(img)
+	if err != nil {
+		writeError(w, stdhttp.StatusUnprocessableEntity, "barcode tidak terdeteksi dari foto")
+		return
+	}
+
+	writeJSON(w, stdhttp.StatusOK, map[string]any{
+		"value":  value,
+		"format": format,
+	})
+}
+
+func decodeBarcodeText(img image.Image) (string, string, error) {
+	readers := []func() gozxing.Reader{
+		oned.NewCode128Reader,
+		oned.NewCode39Reader,
+		oned.NewCode93Reader,
+		oned.NewCodaBarReader,
+		oned.NewITFReader,
+		oned.NewEAN13Reader,
+		oned.NewEAN8Reader,
+		oned.NewUPCAReader,
+		oned.NewUPCEReader,
+		qrcode.NewQRCodeReader,
+	}
+
+	for _, newReader := range readers {
+		bitmap, err := gozxing.NewBinaryBitmapFromImage(img)
+		if err != nil {
+			return "", "", err
+		}
+		reader := newReader()
+		result, err := reader.DecodeWithoutHints(bitmap)
+		reader.Reset()
+		if err != nil || result == nil {
+			continue
+		}
+		value := strings.TrimSpace(result.GetText())
+		if value == "" {
+			continue
+		}
+		return value, fmt.Sprintf("%v", result.GetBarcodeFormat()), nil
+	}
+
+	return "", "", errors.New("barcode tidak ditemukan")
+}
+
+func (h *Handler) ExportAssetsCSV(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	assets, err := h.store.ListAssets()
 	if err != nil {
 		writeError(w, stdhttp.StatusInternalServerError, "gagal mengambil daftar aset")
@@ -1041,8 +1111,9 @@ func (h *Handler) ExportAssetsCSV(w stdhttp.ResponseWriter, _ *stdhttp.Request) 
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
 
-	_ = writer.Write([]string{"ID", "Asset Code", "Nama", "Jenis", "Tanggal Pembelian", "Kondisi", "Barcode", "Created At", "Updated At"})
+	_ = writer.Write([]string{"ID", "Asset Code", "Nama", "Jenis", "Tanggal Pembelian", "Kondisi", "Barcode", "Foto URL", "Created At", "Updated At"})
 	for _, asset := range assets {
+		photoURL := publicAssetURL(r, asset.PhotoPath)
 		_ = writer.Write([]string{
 			strconv.FormatInt(asset.ID, 10),
 			asset.AssetCode,
@@ -1051,6 +1122,7 @@ func (h *Handler) ExportAssetsCSV(w stdhttp.ResponseWriter, _ *stdhttp.Request) 
 			asset.PurchaseDate,
 			asset.Condition,
 			asset.Barcode,
+			photoURL,
 			asset.CreatedAt.Format(time.RFC3339),
 			asset.UpdatedAt.Format(time.RFC3339),
 		})
@@ -1654,6 +1726,44 @@ func (h *Handler) handleImageUpload(w stdhttp.ResponseWriter, r *stdhttp.Request
 	return h.saveImage(file, prefix, maxWidth, maxHeight, quality)
 }
 
+func (h *Handler) saveAssetImageVariants(file io.Reader, prefix string) (string, string, error) {
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return "", "", errors.New("format gambar tidak didukung")
+	}
+
+	if err := os.MkdirAll(filepath.Join("data", "uploads"), 0o755); err != nil {
+		return "", "", errors.New("gagal menyiapkan folder upload")
+	}
+
+	// Simpan dua versi: full image untuk detail/export dan thumbnail untuk tabel.
+	ts := time.Now().UnixNano()
+	fullName := fmt.Sprintf("%s-full-%d.jpg", prefix, ts)
+	thumbName := fmt.Sprintf("%s-thumb-%d.jpg", prefix, ts)
+
+	fullPath := filepath.Join("data", "uploads", fullName)
+	thumbPath := filepath.Join("data", "uploads", thumbName)
+
+	if err := saveResizedJPEG(fullPath, img, 1920, 1080, 82); err != nil {
+		return "", "", errors.New("gagal menyimpan foto full")
+	}
+	if err := saveResizedJPEG(thumbPath, img, 320, 240, 74); err != nil {
+		return "", "", errors.New("gagal menyimpan thumbnail")
+	}
+
+	return "/uploads/" + fullName, "/uploads/" + thumbName, nil
+}
+
+func saveResizedJPEG(diskPath string, img image.Image, maxWidth, maxHeight, quality int) error {
+	resized := resizeToFit(img, maxWidth, maxHeight)
+	out, err := os.Create(diskPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	return jpeg.Encode(out, resized, &jpeg.Options{Quality: quality})
+}
+
 func (h *Handler) saveImage(file io.Reader, prefix string, maxWidth, maxHeight, quality int) (string, error) {
 	img, _, err := image.Decode(file)
 	if err != nil {
@@ -1666,16 +1776,31 @@ func (h *Handler) saveImage(file io.Reader, prefix string, maxWidth, maxHeight, 
 		return "", errors.New("gagal menyiapkan folder upload")
 	}
 
-	filename := fmt.Sprintf("%s-%d.jpg", prefix, time.Now().Unix())
+	filename := fmt.Sprintf("%s-%d.jpg", prefix, time.Now().UnixNano())
 	diskPath := filepath.Join("data", "uploads", filename)
-	out, err := os.Create(diskPath)
-	if err != nil {
+	if err := saveResizedJPEG(diskPath, resized, maxWidth, maxHeight, quality); err != nil {
 		return "", errors.New("gagal menyimpan foto")
 	}
-	defer out.Close()
-
-	if err := jpeg.Encode(out, resized, &jpeg.Options{Quality: quality}); err != nil {
-		return "", errors.New("gagal mengkompres foto")
-	}
 	return "/uploads/" + filename, nil
+}
+
+func publicAssetURL(r *stdhttp.Request, path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+	if r == nil || strings.TrimSpace(r.Host) == "" {
+		return path
+	}
+	scheme := "http"
+	if isSecureRequest(r) {
+		scheme = "https"
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return fmt.Sprintf("%s://%s%s", scheme, r.Host, path)
 }

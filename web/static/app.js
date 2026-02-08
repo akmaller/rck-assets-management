@@ -79,6 +79,17 @@
     assetPrev: document.getElementById("asset-prev"),
     assetNext: document.getElementById("asset-next"),
     assetPageLabel: document.getElementById("asset-page"),
+    confirmModal: document.getElementById("confirm-modal"),
+    confirmBackdrop: document.getElementById("confirm-backdrop"),
+    confirmTitle: document.getElementById("confirm-title"),
+    confirmMessage: document.getElementById("confirm-message"),
+    confirmOk: document.getElementById("confirm-ok"),
+    confirmCancel: document.getElementById("confirm-cancel"),
+    assetPhotoModal: document.getElementById("asset-photo-modal"),
+    assetPhotoBackdrop: document.getElementById("asset-photo-backdrop"),
+    assetPhotoPreview: document.getElementById("asset-photo-preview"),
+    assetPhotoTitle: document.getElementById("asset-photo-title"),
+    assetPhotoClose: document.getElementById("asset-photo-close"),
     loanForm: document.getElementById("loan-form"),
     loanCancel: document.getElementById("loan-cancel"),
     loansTable: document.getElementById("loans-table"),
@@ -97,23 +108,146 @@
     scanVideo: document.getElementById("scan-video"),
     scanClose: document.getElementById("scan-close"),
     scanStatus: document.getElementById("scan-status"),
+    scanUseCamera: document.getElementById("scan-use-camera"),
+    scanUpload: document.getElementById("scan-upload"),
+    scanFile: document.getElementById("scan-file"),
     menuToggle: document.getElementById("menu-toggle"),
     drawerBackdrop: document.getElementById("drawer-backdrop"),
     layout: document.getElementById("dashboard-layout"),
   };
 
+  let flashTimer = null;
   const setFlash = (text, mode = "") => {
     if (!els.flash) return;
     els.flash.textContent = text;
-    els.flash.className = `flash ${mode}`.trim();
+    const tone = mode || "info";
+    els.flash.className = `flash ${tone}`.trim();
     if (text) {
-      setTimeout(() => {
+      els.flash.classList.add("show");
+      if (flashTimer) clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => {
         if (els.flash.textContent === text) {
           els.flash.textContent = "";
           els.flash.className = "flash";
+          els.flash.classList.remove("show");
         }
-      }, 2800);
+      }, 3000);
+      return;
     }
+    els.flash.classList.remove("show");
+  };
+
+  let confirmResolver = null;
+  const CONFIRM_ANIM_MS = 180;
+
+  const openConfirm = () => {
+    if (!els.confirmModal || !els.confirmBackdrop) return;
+    els.confirmModal.hidden = false;
+    els.confirmBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      els.confirmModal.classList.add("show");
+      els.confirmBackdrop.classList.add("show");
+    });
+  };
+
+  const closeConfirm = (result) => {
+    if (!els.confirmModal || !els.confirmBackdrop) return;
+    els.confirmModal.classList.remove("show");
+    els.confirmBackdrop.classList.remove("show");
+    setTimeout(() => {
+      els.confirmModal.hidden = true;
+      els.confirmBackdrop.hidden = true;
+      if (confirmResolver) {
+        confirmResolver(result);
+        confirmResolver = null;
+      }
+    }, CONFIRM_ANIM_MS);
+  };
+
+  const confirmDialog = (message, options = {}) =>
+    new Promise((resolve) => {
+      if (!els.confirmModal || !els.confirmBackdrop) {
+        resolve(true);
+        return;
+      }
+      confirmResolver = resolve;
+      if (els.confirmTitle) {
+        els.confirmTitle.textContent = options.title || "Konfirmasi";
+      }
+      if (els.confirmMessage) {
+        els.confirmMessage.textContent = message || "Apakah Anda yakin?";
+      }
+      if (els.confirmOk) {
+        els.confirmOk.textContent = options.confirmText || "Lanjutkan";
+      }
+      if (els.confirmCancel) {
+        els.confirmCancel.textContent = options.cancelText || "Batal";
+      }
+      openConfirm();
+      setTimeout(() => {
+        els.confirmOk?.focus();
+      }, CONFIRM_ANIM_MS);
+    });
+
+  const setupConfirmDialog = () => {
+    if (!els.confirmModal || !els.confirmBackdrop) return;
+    els.confirmCancel?.addEventListener("click", () => closeConfirm(false));
+    els.confirmOk?.addEventListener("click", () => closeConfirm(true));
+    els.confirmBackdrop.addEventListener("click", () => closeConfirm(false));
+    els.confirmModal.addEventListener("click", (event) => {
+      if (event.target === els.confirmModal) {
+        closeConfirm(false);
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !els.confirmModal.hidden) {
+        closeConfirm(false);
+      }
+    });
+  };
+
+  const ASSET_PHOTO_ANIM_MS = 180;
+  const openAssetPhotoPreview = (fullURL, title = "Foto Aset") => {
+    if (!els.assetPhotoModal || !els.assetPhotoBackdrop || !els.assetPhotoPreview) return;
+    if (!fullURL) return;
+    if (els.assetPhotoTitle) {
+      els.assetPhotoTitle.textContent = title;
+    }
+    els.assetPhotoPreview.src = fullURL;
+    els.assetPhotoPreview.alt = title;
+    els.assetPhotoModal.hidden = false;
+    els.assetPhotoBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      els.assetPhotoModal.classList.add("show");
+      els.assetPhotoBackdrop.classList.add("show");
+    });
+  };
+
+  const closeAssetPhotoPreview = () => {
+    if (!els.assetPhotoModal || !els.assetPhotoBackdrop || !els.assetPhotoPreview) return;
+    els.assetPhotoModal.classList.remove("show");
+    els.assetPhotoBackdrop.classList.remove("show");
+    setTimeout(() => {
+      els.assetPhotoModal.hidden = true;
+      els.assetPhotoBackdrop.hidden = true;
+      els.assetPhotoPreview.src = "";
+    }, ASSET_PHOTO_ANIM_MS);
+  };
+
+  const setupAssetPhotoPreview = () => {
+    if (!els.assetPhotoModal || !els.assetPhotoBackdrop || !els.assetPhotoPreview) return;
+    els.assetPhotoClose?.addEventListener("click", closeAssetPhotoPreview);
+    els.assetPhotoBackdrop.addEventListener("click", closeAssetPhotoPreview);
+    els.assetPhotoModal.addEventListener("click", (event) => {
+      if (event.target === els.assetPhotoModal) {
+        closeAssetPhotoPreview();
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !els.assetPhotoModal.hidden) {
+        closeAssetPhotoPreview();
+      }
+    });
   };
 
   const getCookie = (name) => {
@@ -700,7 +834,11 @@
       }
 
       if (button.dataset.action === "delete-user") {
-        if (!window.confirm(`Hapus user ${user.username}?`)) return;
+      const ok = await confirmDialog(`Hapus user ${user.username}?`, {
+        title: "Hapus User",
+        confirmText: "Hapus",
+      });
+      if (!ok) return;
         try {
           const data = await api(`/api/users/${id}`, { method: "DELETE" });
           setFlash(data.message || "User dihapus.", "success");
@@ -739,7 +877,11 @@
       const id = Number(button.dataset.id);
       const type = state.assetTypes.find((item) => item.id === id);
       if (!type) return;
-      if (!window.confirm(`Hapus jenis ${type.name}?`)) return;
+      const ok = await confirmDialog(`Hapus jenis ${type.name}?`, {
+        title: "Hapus Jenis Aset",
+        confirmText: "Hapus",
+      });
+      if (!ok) return;
       try {
         const data = await api(`/api/asset-types/${id}`, { method: "DELETE" });
         setFlash(data.message || "Jenis aset dihapus.", "success");
@@ -754,27 +896,26 @@
     if (!els.assetsTable) return;
 
     if (state.assets.length === 0) {
-      els.assetsTable.innerHTML = '<tr><td colspan="9">Belum ada aset.</td></tr>';
+      els.assetsTable.innerHTML = '<tr><td colspan="8">Belum ada aset.</td></tr>';
       return;
     }
 
-    els.assetsTable.innerHTML = state.assets
-      .map(
-        (asset) => `
-          <tr>
-            <td>
-              ${
-                asset.photo_url
-                  ? `<img class="thumb" src="${asset.photo_url}" alt="Foto ${escapeHtml(asset.asset_code)}">`
+      els.assetsTable.innerHTML = state.assets
+        .map(
+          (asset) => `
+            <tr>
+              <td>
+                ${
+                (asset.photo_thumb_url || asset.photo_url)
+                  ? `<img class="thumb thumb-clickable" src="${escapeHtml(asset.photo_thumb_url || asset.photo_url)}" data-full-url="${escapeHtml(asset.photo_url || asset.photo_thumb_url || "")}" data-asset-code="${escapeHtml(asset.asset_code)}" alt="Foto ${escapeHtml(asset.asset_code)}">`
                   : `<div class="thumb"></div>`
               }
-            </td>
+              </td>
             <td>${escapeHtml(asset.asset_code)}</td>
             <td>${escapeHtml(asset.name)}</td>
             <td>${escapeHtml(asset.asset_type_name || "-")}</td>
             <td>${escapeHtml(asset.purchase_date)}</td>
             <td>${escapeHtml(asset.condition)}</td>
-            <td>${escapeHtml(asset.barcode || "-")}</td>
             <td>
               <span class="status-pill ${asset.loan_status === "Dipinjam" ? "borrowed" : "available"}">
                 ${escapeHtml(asset.loan_status || "Ada")}
@@ -782,8 +923,16 @@
             </td>
             <td>
               <div class="row-actions">
-                <button class="tiny-btn" data-action="edit-asset" data-id="${asset.id}">Edit</button>
-                <button class="tiny-btn warn" data-action="delete-asset" data-id="${asset.id}">Hapus</button>
+                <button class="tiny-btn icon" data-action="edit-asset" data-id="${asset.id}" aria-label="Edit aset" title="Edit">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l8.06-8.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                  </svg>
+                </button>
+                <button class="tiny-btn warn icon" data-action="delete-asset" data-id="${asset.id}" aria-label="Hapus aset" title="Hapus">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6 7h12l-1 14H7L6 7zm4-3h4l1 2H9l1-2z"/>
+                  </svg>
+                </button>
               </div>
             </td>
           </tr>
@@ -841,6 +990,27 @@
       throw error;
     }
     return data;
+  };
+
+  const decodeBarcodeFromPhoto = async (file) => {
+    if (!file) return "";
+    const csrfToken = getCookie("rck_csrf");
+    const formData = new FormData();
+    formData.append("photo", file);
+
+    const response = await fetch("/api/barcode/decode", {
+      method: "POST",
+      body: formData,
+      credentials: "same-origin",
+      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || "Barcode tidak terdeteksi dari foto.");
+      error.status = response.status;
+      throw error;
+    }
+    return String(data.value || "").trim();
   };
 
   const resetAssetForm = () => {
@@ -924,6 +1094,16 @@
     });
 
     els.assetsTable.addEventListener("click", async (event) => {
+      const thumb = event.target.closest(".thumb-clickable");
+      if (thumb) {
+        const fullURL = thumb.dataset.fullUrl;
+        const assetCode = thumb.dataset.assetCode || "Aset";
+        if (fullURL) {
+          openAssetPhotoPreview(fullURL, `Foto ${assetCode}`);
+        }
+        return;
+      }
+
       const button = event.target.closest("button[data-action]");
       if (!button) return;
 
@@ -950,7 +1130,11 @@
       }
 
       if (button.dataset.action === "delete-asset") {
-        if (!window.confirm(`Hapus aset ${asset.asset_code}?`)) return;
+        const ok = await confirmDialog(`Hapus aset ${asset.asset_code}?`, {
+          title: "Hapus Aset",
+          confirmText: "Hapus",
+        });
+        if (!ok) return;
         try {
           const data = await api(`/api/assets/${id}`, { method: "DELETE" });
           setFlash(data.message || "Aset dihapus.", "success");
@@ -1213,7 +1397,11 @@
       }
 
       if (button.dataset.action === "return-loan") {
-        if (!window.confirm("Tandai aset sudah dikembalikan?")) return;
+        const ok = await confirmDialog("Tandai aset sudah dikembalikan?", {
+          title: "Konfirmasi Pengembalian",
+          confirmText: "Ya, kembalikan",
+        });
+        if (!ok) return;
         try {
           const itemId = button.dataset.itemId;
           const data = await api(`/api/loans/${id}/items/${itemId}/return`, { method: "POST" });
@@ -1226,7 +1414,11 @@
       }
 
       if (button.dataset.action === "delete-loan") {
-        if (!window.confirm("Hapus data peminjaman ini?")) return;
+        const ok = await confirmDialog("Hapus data peminjaman ini?", {
+          title: "Hapus Peminjaman",
+          confirmText: "Hapus",
+        });
+        if (!ok) return;
         try {
           const data = await api(`/api/loans/${id}`, { method: "DELETE" });
           setFlash(data.message || "Peminjaman dihapus.", "success");
@@ -1499,49 +1691,226 @@
   };
 
   const setupBarcodeScanner = () => {
-    if (!els.scanModal || !els.scanVideo) return;
-    const ZXingBrowser = window.ZXingBrowser;
-    if (!ZXingBrowser || !ZXingBrowser.BrowserMultiFormatReader) {
-      return;
-    }
-
-    const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+    if (!els.scanModal || !els.scanVideo || !els.scanStatus) return;
+    let codeReader = null;
+    const barcodeFormats = [
+      "code_128",
+      "ean_13",
+      "ean_8",
+      "code_39",
+      "codabar",
+      "itf",
+      "upc_a",
+      "upc_e",
+      "qr_code",
+      "data_matrix",
+    ];
+    const getCodeReader = () => {
+      if (codeReader) return codeReader;
+      const ZXingBrowser = window.ZXingBrowser;
+      if (ZXingBrowser && ZXingBrowser.BrowserMultiFormatReader) {
+        codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+      }
+      return codeReader;
+    };
     let activeInput = null;
     let controls = null;
+    let mediaStream = null;
+    let detectFrameID = 0;
+    let nativeDetector = null;
 
-    const openModal = async (input) => {
-      activeInput = input;
-      els.scanStatus.textContent = "Arahkan kamera ke barcode.";
+    const showModal = () => {
       els.scanModal.classList.add("active");
       els.scanModal.setAttribute("aria-hidden", "false");
-      try {
-        controls = await codeReader.decodeFromVideoDevice(null, els.scanVideo, (result, err) => {
-          if (result) {
-            activeInput.value = result.text;
-            activeInput.dataset.auto = "0";
-            closeModal();
-          } else if (err && err.name !== "NotFoundException") {
-            els.scanStatus.textContent = "Barcode tidak terbaca. Coba lagi dengan lebih jelas.";
-          }
-        });
-      } catch (_) {
-        els.scanStatus.textContent = "Kamera tidak tersedia atau izin ditolak.";
-      }
     };
 
-    const closeModal = () => {
+    const hideModal = () => {
+      els.scanModal.classList.remove("active");
+      els.scanModal.setAttribute("aria-hidden", "true");
+    };
+
+    const stopCamera = () => {
       if (controls) {
         controls.stop();
         controls = null;
       }
-      els.scanModal.classList.remove("active");
-      els.scanModal.setAttribute("aria-hidden", "true");
+      if (detectFrameID) {
+        cancelAnimationFrame(detectFrameID);
+        detectFrameID = 0;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+      }
+      if (els.scanVideo) {
+        els.scanVideo.pause();
+        els.scanVideo.srcObject = null;
+      }
+      nativeDetector = null;
+    };
+
+    const closeModal = () => {
+      stopCamera();
+      hideModal();
       activeInput = null;
+    };
+
+    const applyScannedValue = (value) => {
+      if (!activeInput) return;
+      activeInput.value = value || "";
+      activeInput.dataset.auto = "0";
+    };
+
+    const startNativeCameraScan = async () => {
+      if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
+        return false;
+      }
+      try {
+        nativeDetector = new window.BarcodeDetector({ formats: barcodeFormats });
+      } catch (_) {
+        nativeDetector = null;
+        return false;
+      }
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+        });
+        els.scanVideo.srcObject = mediaStream;
+        await els.scanVideo.play();
+      } catch (_) {
+        mediaStream = null;
+        nativeDetector = null;
+        return false;
+      }
+
+      const tick = async () => {
+        if (!nativeDetector || !mediaStream) return;
+        try {
+          const results = await nativeDetector.detect(els.scanVideo);
+          if (results.length > 0) {
+            const value = String(results[0].rawValue || "").trim();
+            if (value) {
+              applyScannedValue(value);
+              closeModal();
+              return;
+            }
+          }
+        } catch (_) {
+        }
+        detectFrameID = requestAnimationFrame(tick);
+      };
+
+      detectFrameID = requestAnimationFrame(tick);
+      return true;
+    };
+
+    const startCameraScan = async () => {
+      if (!window.isSecureContext && location.hostname !== "localhost") {
+        setFlash("Scan kamera butuh HTTPS.", "error");
+        return;
+      }
+      stopCamera();
+      els.scanStatus.textContent = "Arahkan kamera ke barcode.";
+
+      const reader = getCodeReader();
+      if (reader) {
+        try {
+          controls = await reader.decodeFromVideoDevice(null, els.scanVideo, (result, err) => {
+            if (result) {
+              applyScannedValue(String(result.text || "").trim());
+              closeModal();
+            } else if (err && err.name !== "NotFoundException") {
+              els.scanStatus.textContent = "Barcode belum terbaca, arahkan kamera lebih dekat.";
+            }
+          });
+          return;
+        } catch (_) {
+        }
+      }
+
+      const nativeStarted = await startNativeCameraScan();
+      if (nativeStarted) {
+        return;
+      }
+
+      // Fallback terakhir: buka kamera/file picker lalu decode dari foto.
+      if (els.scanFile) {
+        els.scanStatus.textContent = "Live scanner tidak tersedia. Gunakan foto barcode.";
+        els.scanFile.value = "";
+        els.scanFile.click();
+        return;
+      }
+
+      setFlash("Kamera tidak tersedia atau izin ditolak.", "error");
+    };
+
+    const decodeImageFile = async (file) => {
+      if (!file) return;
+      els.scanStatus.textContent = "Memindai foto barcode...";
+
+      // Prioritaskan decode di backend agar tetap jalan meski scanner browser tidak siap.
+      try {
+        const value = await decodeBarcodeFromPhoto(file);
+        if (value) {
+          applyScannedValue(value);
+          closeModal();
+          return;
+        }
+      } catch (_) {
+      }
+
+      const url = URL.createObjectURL(file);
+      try {
+        const reader = getCodeReader();
+        if (reader) {
+          const result = await reader.decodeFromImageUrl(url);
+          applyScannedValue(String(result.text || "").trim());
+          closeModal();
+          return;
+        }
+
+        if ("BarcodeDetector" in window) {
+          const img = new Image();
+          img.src = url;
+          await img.decode();
+          const detector = new window.BarcodeDetector({ formats: barcodeFormats });
+          const results = await detector.detect(img);
+          if (results.length > 0) {
+            applyScannedValue(String(results[0].rawValue || "").trim());
+            closeModal();
+            return;
+          }
+        }
+
+        els.scanStatus.textContent = "Barcode tidak terdeteksi dari foto.";
+      } catch (_) {
+        els.scanStatus.textContent = "Barcode tidak terdeteksi dari foto.";
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     };
 
     els.scanClose.addEventListener("click", closeModal);
     els.scanModal.addEventListener("click", (event) => {
       if (event.target === els.scanModal) closeModal();
+    });
+
+    els.scanUseCamera?.addEventListener("click", () => {
+      stopCamera();
+      startCameraScan();
+    });
+
+    els.scanUpload?.addEventListener("click", () => {
+      if (els.scanFile) {
+        els.scanFile.value = "";
+        els.scanFile.click();
+      }
+    });
+
+    els.scanFile?.addEventListener("change", (event) => {
+      const file = event.target?.files?.[0];
+      decodeImageFile(file);
     });
 
     document.querySelectorAll(".scan-btn").forEach((btn) => {
@@ -1550,11 +1919,9 @@
         const input =
           target === "quick" ? els.quickAssetForm?.barcode : els.assetForm?.barcode;
         if (!input) return;
-        if (!window.isSecureContext && location.hostname !== "localhost") {
-          setFlash("Scan kamera butuh HTTPS.", "error");
-          return;
-        }
-        openModal(input);
+        activeInput = input;
+        els.scanStatus.textContent = "Pilih kamera atau upload foto barcode.";
+        showModal();
       });
     });
   };
@@ -1579,16 +1946,18 @@
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
 
-  const bootstrap = async () => {
-    try {
-      setupDrawer();
-      setupMenu();
-      setupScrollSpy();
-      setupMobileAdd();
-      setupLogout();
-      setupCompanyForm();
-      setupAutoAssetCodeInputs();
-      setupTypes();
+    const bootstrap = async () => {
+      try {
+        setupDrawer();
+        setupMenu();
+        setupScrollSpy();
+        setupMobileAdd();
+        setupLogout();
+        setupConfirmDialog();
+        setupAssetPhotoPreview();
+        setupCompanyForm();
+        setupAutoAssetCodeInputs();
+        setupTypes();
       setupUsers();
       setupAssets();
       setupAssetsFilter();
