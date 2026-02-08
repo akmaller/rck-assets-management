@@ -39,6 +39,7 @@
   const els = {
     flash: document.getElementById("flash"),
     menuNav: document.getElementById("menu-nav"),
+    bottomNav: document.getElementById("mobile-bottom-nav"),
     panels: Array.from(document.querySelectorAll(".panel")),
     roleBadge: document.getElementById("role-badge"),
     welcomeUser: document.getElementById("welcome-user"),
@@ -177,6 +178,15 @@
     els.flash.classList.remove("show");
   };
 
+  const syncModalState = () => {
+    const modalActive = Boolean(
+      document.querySelector(
+        ".modal.show, .modal-backdrop.show, .scan-modal.active, .select-mobile-sheet.show, .select-mobile-backdrop.show",
+      ),
+    );
+    document.body.classList.toggle("modal-open", modalActive);
+  };
+
   let confirmResolver = null;
   const CONFIRM_ANIM_MS = 180;
 
@@ -187,6 +197,7 @@
     requestAnimationFrame(() => {
       els.confirmModal.classList.add("show");
       els.confirmBackdrop.classList.add("show");
+      syncModalState();
     });
   };
 
@@ -194,6 +205,7 @@
     if (!els.confirmModal || !els.confirmBackdrop) return;
     els.confirmModal.classList.remove("show");
     els.confirmBackdrop.classList.remove("show");
+    syncModalState();
     setTimeout(() => {
       els.confirmModal.hidden = true;
       els.confirmBackdrop.hidden = true;
@@ -260,6 +272,7 @@
     requestAnimationFrame(() => {
       els.assetPhotoModal.classList.add("show");
       els.assetPhotoBackdrop.classList.add("show");
+      syncModalState();
     });
   };
 
@@ -267,6 +280,7 @@
     if (!els.assetPhotoModal || !els.assetPhotoBackdrop || !els.assetPhotoPreview) return;
     els.assetPhotoModal.classList.remove("show");
     els.assetPhotoBackdrop.classList.remove("show");
+    syncModalState();
     setTimeout(() => {
       els.assetPhotoModal.hidden = true;
       els.assetPhotoBackdrop.hidden = true;
@@ -543,6 +557,7 @@
     customSelectState.sheet.classList.remove("show");
     customSelectState.backdrop.classList.remove("show");
     document.body.classList.remove("select-mobile-open");
+    syncModalState();
     setTimeout(() => {
       if (customSelectState.mobileOpen) return;
       customSelectState.sheet.hidden = true;
@@ -574,6 +589,7 @@
     requestAnimationFrame(() => {
       customSelectState.backdrop?.classList.add("show");
       customSelectState.sheet?.classList.add("show");
+      syncModalState();
     });
   };
 
@@ -716,9 +732,24 @@
     customSelectState.listenersBound = true;
   };
 
+  const getSectionLinks = () =>
+    Array.from(document.querySelectorAll(".menu-link, .bottom-nav-item"));
+
+  const setActiveLinks = (name) => {
+    const links = getSectionLinks();
+    links.forEach((link) => {
+      const isActive = link.dataset.section === name;
+      link.classList.toggle("active", isActive);
+      if (isActive) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+  };
+
   const activateSection = (name) => {
-    const links = Array.from(document.querySelectorAll(".menu-link"));
-    links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
+    setActiveLinks(name);
     els.panels.forEach((panel) => panel.classList.toggle("active", panel.id === `section-${name}`));
     queueMenuIndicatorSync();
     closeDrawer();
@@ -757,6 +788,11 @@
       if (!button) return;
       activateSection(button.dataset.section);
     });
+    els.bottomNav?.addEventListener("click", (event) => {
+      const button = event.target.closest(".bottom-nav-item");
+      if (!button) return;
+      activateSection(button.dataset.section);
+    });
   };
 
   const setupMobileAdd = () => {
@@ -774,8 +810,7 @@
     if (sections.length === 0) return;
 
     const setActiveBySection = (name) => {
-      const links = Array.from(document.querySelectorAll(".menu-link"));
-      links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
+      setActiveLinks(name);
       queueMenuIndicatorSync();
     };
 
@@ -1056,6 +1091,7 @@
       requestAnimationFrame(() => {
         els.companyMediaModal.classList.add("show");
         els.companyMediaBackdrop.classList.add("show");
+        syncModalState();
       });
     };
 
@@ -1088,6 +1124,7 @@
       if (cropState.busy) return;
       els.companyMediaModal.classList.remove("show");
       els.companyMediaBackdrop.classList.remove("show");
+      syncModalState();
       const closeFlowId = cropState.flowId + 1;
       cropState.flowId = closeFlowId;
       setTimeout(() => {
@@ -2346,6 +2383,7 @@
       requestAnimationFrame(() => {
         els.loanModal.classList.add("show");
         els.loanBackdrop.classList.add("show");
+        syncModalState();
       });
     };
 
@@ -2353,6 +2391,7 @@
       if (!els.loanModal || !els.loanBackdrop) return;
       els.loanModal.classList.remove("show");
       els.loanBackdrop.classList.remove("show");
+      syncModalState();
       setTimeout(() => {
         els.loanModal.hidden = true;
         els.loanBackdrop.hidden = true;
@@ -2778,6 +2817,7 @@
       requestAnimationFrame(() => {
         els.importModal.classList.add("show");
         els.importBackdrop.classList.add("show");
+        syncModalState();
       });
     };
 
@@ -2785,6 +2825,7 @@
       if (importUploading) return;
       els.importModal.classList.remove("show");
       els.importBackdrop.classList.remove("show");
+      syncModalState();
       setTimeout(() => {
         els.importModal.hidden = true;
         els.importBackdrop.hidden = true;
@@ -3264,11 +3305,13 @@
     const showModal = () => {
       els.scanModal.classList.add("active");
       els.scanModal.setAttribute("aria-hidden", "false");
+      syncModalState();
     };
 
     const hideModal = () => {
       els.scanModal.classList.remove("active");
       els.scanModal.setAttribute("aria-hidden", "true");
+      syncModalState();
     };
 
     const stopCamera = () => {
