@@ -143,10 +143,12 @@
     importCancel: document.getElementById("import-cancel"),
     importSubmit: document.getElementById("import-submit"),
     scanModal: document.getElementById("scan-modal"),
+    scanTitle: document.getElementById("scan-title"),
     scanVideo: document.getElementById("scan-video"),
     scanClose: document.getElementById("scan-close"),
     scanStatus: document.getElementById("scan-status"),
     scanUseCamera: document.getElementById("scan-use-camera"),
+    scanCapture: document.getElementById("scan-capture"),
     scanUpload: document.getElementById("scan-upload"),
     scanFile: document.getElementById("scan-file"),
     menuToggle: document.getElementById("menu-toggle"),
@@ -3005,10 +3007,259 @@
       return codeReader;
     };
     let activeInput = null;
+    let activePhotoInput = null;
+    let mode = "barcode";
     let controls = null;
     let mediaStream = null;
     let detectFrameID = 0;
     let nativeDetector = null;
+    let assistTimerID = 0;
+    let assistBusy = false;
+    let assistAttempt = 0;
+
+    const isLocalHost =
+      location.hostname === "localhost" ||
+      location.hostname === "127.0.0.1" ||
+      location.hostname === "::1";
+
+    const cameraConstraintCandidates = [
+      {
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30, max: 60 },
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 24, max: 30 },
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: "environment" },
+        },
+        audio: false,
+      },
+    ];
+
+    const openCameraStream = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) return null;
+      for (const constraints of cameraConstraintCandidates) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          return stream;
+        } catch (_) {
+        }
+      }
+      return null;
+    };
+
+    const tuneCameraTrack = async () => {
+      if (!mediaStream) return;
+      const [track] = mediaStream.getVideoTracks();
+      if (!track || typeof track.applyConstraints !== "function") return;
+      if (typeof track.getCapabilities !== "function") return;
+      try {
+        const caps = track.getCapabilities();
+        const advanced = [];
+        if (Array.isArray(caps?.focusMode) && caps.focusMode.includes("continuous")) {
+          advanced.push({ focusMode: "continuous" });
+        }
+        if (caps?.zoom && Number.isFinite(caps.zoom.max) && caps.zoom.max > 1) {
+          advanced.push({ zoom: Math.min(2, caps.zoom.max) });
+        }
+        if (advanced.length > 0) {
+          await track.applyConstraints({ advanced });
+        }
+      } catch (_) {
+      }
+    };
+
+    const toBlob = (canvas, type = "image/jpeg", quality = 0.94) =>
+      new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Gagal menyiapkan gambar."));
+              return;
+            }
+            resolve(blob);
+          },
+          type,
+          quality,
+        );
+      });
+
+    const buildScanCanvases = (source, width, height) => {
+      if (!source || !width || !height) return [];
+      const variants = [
+        { crop: 1, upscale: 1 },
+        { crop: 0.82, upscale: 1.4 },
+        { crop: 0.66, upscale: 1.9 },
+        { crop: 0.5, upscale: 2.35 },
+      ];
+
+      return variants
+        .map((variant) => {
+          const cropW = Math.max(1, Math.round(width * variant.crop));
+          const cropH = Math.max(1, Math.round(height * variant.crop));
+          const sx = Math.max(0, Math.floor((width - cropW) / 2));
+          const sy = Math.max(0, Math.floor((height - cropH) / 2));
+          const outW = Math.min(2200, Math.max(360, Math.round(cropW * variant.upscale)));
+          const outH = Math.min(2200, Math.max(360, Math.round(cropH * variant.upscale)));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = outW;
+          canvas.height = outH;
+          const context = canvas.getContext("2d");
+          if (!context) return null;
+          context.imageSmoothingEnabled = false;
+          context.drawImage(source, sx, sy, cropW, cropH, 0, 0, outW, outH);
+          return canvas;
+        })
+        .filter(Boolean);
+    };
+
+    const decodeCanvasLocal = async (canvas) => {
+      if (!canvas) return "";
+
+      if ("BarcodeDetector" in window) {
+        try {
+          const detector = nativeDetector || new window.BarcodeDetector({ formats: barcodeFormats });
+          const results = await detector.detect(canvas);
+          if (results.length > 0) {
+            const value = String(results[0].rawValue || "").trim();
+            if (value) return value;
+          }
+        } catch (_) {
+        }
+      }
+
+      const reader = getCodeReader();
+      if (!reader) return "";
+      let url = "";
+      try {
+        const blob = await toBlob(canvas);
+        url = URL.createObjectURL(blob);
+        const result = await reader.decodeFromImageUrl(url);
+        const value = String(result?.text || "").trim();
+        if (value) return value;
+      } catch (_) {
+      } finally {
+        if (url) URL.revokeObjectURL(url);
+      }
+
+      return "";
+    };
+
+    const decodeCanvasServer = async (canvas) => {
+      if (!canvas) return "";
+      try {
+        const blob = await toBlob(canvas);
+        const file = new File([blob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+        const value = await decodeBarcodeFromPhoto(file);
+        return String(value || "").trim();
+      } catch (_) {
+        return "";
+      }
+    };
+
+    const robustDecodeFromSource = async (source, width, height, options = {}) => {
+      const canvases = buildScanCanvases(source, width, height);
+      if (canvases.length === 0) return "";
+      const allowServer = Boolean(options.allowServer);
+      const serverLimit = Math.max(0, Number(options.serverLimit || 0));
+      let serverTried = 0;
+
+      for (const canvas of canvases) {
+        const localValue = await decodeCanvasLocal(canvas);
+        if (localValue) return localValue;
+
+        if (allowServer && serverTried < serverLimit) {
+          const serverValue = await decodeCanvasServer(canvas);
+          serverTried += 1;
+          if (serverValue) return serverValue;
+        }
+      }
+      return "";
+    };
+
+    const stopAssistLoop = () => {
+      if (assistTimerID) {
+        clearInterval(assistTimerID);
+        assistTimerID = 0;
+      }
+      assistBusy = false;
+      assistAttempt = 0;
+    };
+
+    const startAssistLoop = () => {
+      if (mode !== "barcode") return;
+      stopAssistLoop();
+      assistTimerID = window.setInterval(async () => {
+        if (assistBusy) return;
+        if (!els.scanModal.classList.contains("active")) return;
+        if (!els.scanVideo || els.scanVideo.readyState < 2) return;
+        if (!els.scanVideo.videoWidth || !els.scanVideo.videoHeight) return;
+
+        assistBusy = true;
+        try {
+          assistAttempt += 1;
+          const value = await robustDecodeFromSource(
+            els.scanVideo,
+            els.scanVideo.videoWidth,
+            els.scanVideo.videoHeight,
+            {
+              allowServer: assistAttempt % 4 === 0,
+              serverLimit: 1,
+            },
+          );
+          if (value) {
+            applyScannedValue(value);
+            closeModal();
+            return;
+          }
+          if (assistAttempt % 2 === 0) {
+            els.scanStatus.textContent = "Belum terbaca. Dekatkan barcode dan tahan kamera tetap stabil.";
+          }
+        } finally {
+          assistBusy = false;
+        }
+      }, 750);
+    };
+
+    const setCaptureButton = (visible, text = "Ambil Frame") => {
+      if (!els.scanCapture) return;
+      els.scanCapture.hidden = !visible;
+      if (visible) {
+        els.scanCapture.textContent = text;
+      }
+    };
+
+    const setMode = (nextMode) => {
+      mode = nextMode === "photo" ? "photo" : "barcode";
+      if (els.scanTitle) {
+        els.scanTitle.textContent = mode === "photo" ? "Ambil Foto Aset" : "Scan Barcode";
+      }
+      if (els.scanUseCamera) {
+        els.scanUseCamera.textContent = "Gunakan Kamera";
+      }
+      if (els.scanUpload) {
+        els.scanUpload.textContent = mode === "photo" ? "Pilih dari File" : "Upload Foto";
+      }
+      els.scanStatus.textContent =
+        mode === "photo"
+          ? "Klik Gunakan Kamera lalu Ambil Gambar, atau pilih file."
+          : "Pilih kamera atau upload foto barcode.";
+      setCaptureButton(false);
+    };
 
     const showModal = () => {
       els.scanModal.classList.add("active");
@@ -3021,6 +3272,7 @@
     };
 
     const stopCamera = () => {
+      stopAssistLoop();
       if (controls) {
         controls.stop();
         controls = null;
@@ -3044,12 +3296,68 @@
       stopCamera();
       hideModal();
       activeInput = null;
+      activePhotoInput = null;
+      setMode("barcode");
     };
 
     const applyScannedValue = (value) => {
       if (!activeInput) return;
       activeInput.value = value || "";
       activeInput.dataset.auto = "0";
+    };
+
+    const applyPhotoFile = (file) => {
+      if (!activePhotoInput || !file) return false;
+      if (typeof DataTransfer === "undefined") return false;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      activePhotoInput.files = transfer.files;
+      activePhotoInput.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    };
+
+    const captureVideoFrameAsFile = () =>
+      new Promise((resolve, reject) => {
+        if (!els.scanVideo || els.scanVideo.readyState < 2 || !els.scanVideo.videoWidth || !els.scanVideo.videoHeight) {
+          reject(new Error("Kamera belum siap."));
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = els.scanVideo.videoWidth;
+        canvas.height = els.scanVideo.videoHeight;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Gagal mengambil frame kamera."));
+          return;
+        }
+        context.drawImage(els.scanVideo, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Gagal membuat gambar dari kamera."));
+              return;
+            }
+            resolve(new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          0.92,
+        );
+      });
+
+    const startCameraPreview = async () => {
+      try {
+        mediaStream = await openCameraStream();
+        if (!mediaStream) {
+          return false;
+        }
+        els.scanVideo.srcObject = mediaStream;
+        await els.scanVideo.play();
+        await tuneCameraTrack();
+        return true;
+      } catch (_) {
+        mediaStream = null;
+        return false;
+      }
     };
 
     const startNativeCameraScan = async () => {
@@ -3064,11 +3372,14 @@
       }
 
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-        });
+        mediaStream = await openCameraStream();
+        if (!mediaStream) {
+          nativeDetector = null;
+          return false;
+        }
         els.scanVideo.srcObject = mediaStream;
         await els.scanVideo.play();
+        await tuneCameraTrack();
       } catch (_) {
         mediaStream = null;
         nativeDetector = null;
@@ -3097,43 +3408,75 @@
     };
 
     const startCameraScan = async () => {
-      if (!window.isSecureContext && location.hostname !== "localhost") {
-        setFlash("Scan kamera butuh HTTPS.", "error");
+      if (!window.isSecureContext && !isLocalHost) {
+        setFlash("Akses kamera butuh HTTPS.", "error");
         return;
       }
       stopCamera();
+      setCaptureButton(false);
+
+      if (mode === "photo") {
+        els.scanStatus.textContent = "Menyalakan kamera...";
+        const previewStarted = await startCameraPreview();
+        if (previewStarted) {
+          setCaptureButton(true, "Ambil Gambar");
+          els.scanStatus.textContent = "Kamera aktif. Klik Ambil Gambar.";
+          return;
+        }
+        els.scanStatus.textContent = "Kamera tidak tersedia atau izin ditolak. Gunakan pilih file.";
+        return;
+      }
+
       els.scanStatus.textContent = "Arahkan kamera ke barcode.";
 
       const reader = getCodeReader();
       if (reader) {
+        const onResult = (result, err) => {
+          if (result) {
+            applyScannedValue(String(result.text || "").trim());
+            closeModal();
+          } else if (err && err.name !== "NotFoundException") {
+            els.scanStatus.textContent = "Barcode belum terbaca, arahkan kamera lebih dekat.";
+          }
+        };
         try {
-          controls = await reader.decodeFromVideoDevice(null, els.scanVideo, (result, err) => {
-            if (result) {
-              applyScannedValue(String(result.text || "").trim());
-              closeModal();
-            } else if (err && err.name !== "NotFoundException") {
-              els.scanStatus.textContent = "Barcode belum terbaca, arahkan kamera lebih dekat.";
-            }
-          });
+          if (typeof reader.decodeFromConstraints === "function") {
+            controls = await reader.decodeFromConstraints(cameraConstraintCandidates[0], els.scanVideo, onResult);
+          } else {
+            controls = await reader.decodeFromVideoDevice(null, els.scanVideo, onResult);
+          }
+          await tuneCameraTrack();
+          setCaptureButton(true, "Ambil Frame");
+          startAssistLoop();
           return;
         } catch (_) {
+          try {
+            controls = await reader.decodeFromVideoDevice(null, els.scanVideo, onResult);
+            await tuneCameraTrack();
+            setCaptureButton(true, "Ambil Frame");
+            startAssistLoop();
+            return;
+          } catch (_) {
+          }
         }
       }
 
       const nativeStarted = await startNativeCameraScan();
       if (nativeStarted) {
+        setCaptureButton(true, "Ambil Frame");
+        startAssistLoop();
         return;
       }
 
-      // Fallback terakhir: buka kamera/file picker lalu decode dari foto.
-      if (els.scanFile) {
-        els.scanStatus.textContent = "Live scanner tidak tersedia. Gunakan foto barcode.";
-        els.scanFile.value = "";
-        els.scanFile.click();
+      const previewStarted = await startCameraPreview();
+      if (previewStarted) {
+        setCaptureButton(true, "Ambil Frame");
+        startAssistLoop();
+        els.scanStatus.textContent = "Kamera aktif. Memindai barcode, atau klik Ambil Frame.";
         return;
       }
 
-      setFlash("Kamera tidak tersedia atau izin ditolak.", "error");
+      els.scanStatus.textContent = "Kamera tidak tersedia atau izin ditolak. Gunakan upload foto.";
     };
 
     const decodeImageFile = async (file) => {
@@ -3153,28 +3496,23 @@
 
       const url = URL.createObjectURL(file);
       try {
-        const reader = getCodeReader();
-        if (reader) {
-          const result = await reader.decodeFromImageUrl(url);
-          applyScannedValue(String(result.text || "").trim());
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+
+        const value = await robustDecodeFromSource(
+          img,
+          img.naturalWidth || img.width,
+          img.naturalHeight || img.height,
+          { allowServer: true, serverLimit: 2 },
+        );
+        if (value) {
+          applyScannedValue(value);
           closeModal();
           return;
         }
 
-        if ("BarcodeDetector" in window) {
-          const img = new Image();
-          img.src = url;
-          await img.decode();
-          const detector = new window.BarcodeDetector({ formats: barcodeFormats });
-          const results = await detector.detect(img);
-          if (results.length > 0) {
-            applyScannedValue(String(results[0].rawValue || "").trim());
-            closeModal();
-            return;
-          }
-        }
-
-        els.scanStatus.textContent = "Barcode tidak terdeteksi dari foto.";
+        els.scanStatus.textContent = "Barcode tidak terdeteksi dari foto. Coba fokus lebih dekat atau gunakan pencahayaan lebih terang.";
       } catch (_) {
         els.scanStatus.textContent = "Barcode tidak terdeteksi dari foto.";
       } finally {
@@ -3192,6 +3530,42 @@
       startCameraScan();
     });
 
+    els.scanCapture?.addEventListener("click", async () => {
+      try {
+        if (mode === "photo") {
+          const frameFile = await captureVideoFrameAsFile();
+          if (!applyPhotoFile(frameFile)) {
+            setFlash("Browser tidak mendukung auto-fill file input. Silakan pilih dari file.", "error");
+            return;
+          }
+          closeModal();
+          return;
+        }
+
+        if (!els.scanVideo || els.scanVideo.readyState < 2 || !els.scanVideo.videoWidth || !els.scanVideo.videoHeight) {
+          els.scanStatus.textContent = "Kamera belum siap.";
+          return;
+        }
+
+        els.scanStatus.textContent = "Memindai frame kamera...";
+        const value = await robustDecodeFromSource(
+          els.scanVideo,
+          els.scanVideo.videoWidth,
+          els.scanVideo.videoHeight,
+          { allowServer: true, serverLimit: 2 },
+        );
+        if (value) {
+          applyScannedValue(value);
+          closeModal();
+          return;
+        }
+
+        els.scanStatus.textContent = "Barcode belum terbaca. Coba dekatkan barcode ke kamera.";
+      } catch (error) {
+        els.scanStatus.textContent = error.message || "Kamera belum siap.";
+      }
+    });
+
     els.scanUpload?.addEventListener("click", () => {
       if (els.scanFile) {
         els.scanFile.value = "";
@@ -3201,6 +3575,15 @@
 
     els.scanFile?.addEventListener("change", (event) => {
       const file = event.target?.files?.[0];
+      if (!file) return;
+      if (mode === "photo") {
+        if (!applyPhotoFile(file)) {
+          setFlash("Gagal memasukkan foto ke form.", "error");
+          return;
+        }
+        closeModal();
+        return;
+      }
       decodeImageFile(file);
     });
 
@@ -3211,20 +3594,23 @@
           target === "quick" ? els.quickAssetForm?.barcode : els.assetForm?.barcode;
         if (!input) return;
         activeInput = input;
-        els.scanStatus.textContent = "Pilih kamera atau upload foto barcode.";
+        activePhotoInput = null;
+        setMode("barcode");
         showModal();
       });
     });
-  };
 
-  const setupPhotoCameraButtons = () => {
     document.querySelectorAll(".photo-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const target = btn.dataset.photoTarget;
         const input =
           target === "quick" ? els.quickAssetForm?.photo : els.assetForm?.photo;
         if (!input) return;
-        input.click();
+        activeInput = null;
+        activePhotoInput = input;
+        setMode("photo");
+        showModal();
+        startCameraScan();
       });
     });
   };
@@ -3263,7 +3649,6 @@
       setupImportDialog();
       setupExport();
       setupBarcodeScanner();
-      setupPhotoCameraButtons();
 
       await loadMe();
       await loadCompany();

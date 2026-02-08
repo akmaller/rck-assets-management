@@ -659,7 +659,7 @@
   <div class="scan-modal" id="scan-modal" aria-hidden="true">
     <div class="scan-card">
       <div class="scan-header">
-        <strong>Scan Barcode</strong>
+        <strong id="scan-title">Scan Barcode</strong>
         <button type="button" class="icon-btn scan-close" id="scan-close" aria-label="Tutup">
           <span></span>
           <span></span>
@@ -669,12 +669,13 @@
       <input type="file" id="scan-file" accept="image/*" capture="environment" hidden>
       <div class="scan-actions">
         <button type="button" class="btn btn-outline" id="scan-use-camera">Gunakan Kamera</button>
+        <button type="button" class="btn btn-primary" id="scan-capture" hidden>Ambil Frame</button>
         <button type="button" class="btn btn-outline" id="scan-upload">Upload Foto</button>
       </div>
       <p class="muted small" id="scan-status">Pilih kamera atau upload foto barcode.</p>
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-28" defer></script>
+  <script src="/static/app.js?v=20260208-30" defer></script>
 </body>
 </html>
