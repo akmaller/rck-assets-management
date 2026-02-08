@@ -1,82 +1,148 @@
-# RCK-Assets
+# RCK-Assets Management
 
-Aplikasi web manajemen aset berbasis Go dengan arsitektur API-first (JWT), sehingga siap dikembangkan ke aplikasi mobile.
+Aplikasi web manajemen aset berbasis Go (API + server-rendered frontend) untuk kebutuhan inventaris, peminjaman, audit aktivitas, dan pengelolaan identitas perusahaan.
 
-## Fitur
+## Fitur Utama
 
-- Landing page berupa single login page.
-- Dashboard manajemen aset.
-- Setting identitas perusahaan:
-  - Nama perusahaan
-  - Alamat
-  - Email
-  - Telepon
-  - Website
-  - Prefix ID aset
-- Setting users (khusus admin):
-  - CRUD user login
-  - Role `admin` dan `staff`
-  - Status aktif/nonaktif
-- Registrasi aset:
-  - ID Aset (`asset_code`)
-  - Nama aset
-  - Tanggal pembelian
-  - Kondisi
-  - Barcode
+- Login single page + session berbasis JWT cookie.
+- Sidebar menu:
+  - `Tambah Aset`
+  - `Manajemen Aset`
+  - `Peminjaman`
+  - `Jenis Aset`
+  - `Setting Users`
+  - `Setting Identitas`
+  - `Audit Log`
 - Manajemen aset:
-  - List aset
-  - Edit aset
-  - Hapus aset
-- DB multi-driver:
-  - Default: SQLite
-  - Opsi: PostgreSQL dan MySQL
+  - Tambah/edit aset
+  - Upload foto aset
+  - Simpan 2 varian gambar otomatis saat upload:
+    - `full image` untuk detail/export
+    - `thumbnail` untuk tabel agar ringan
+  - Filter + pagination
+  - Export/Import CSV (admin)
+- Peminjaman:
+  - Buat/edit pinjaman (form dalam modal)
+  - Kembalikan item pinjaman
+  - Filter + pagination
+  - Export/Import CSV (admin)
+- Jenis aset:
+  - Lihat daftar jenis aset + keterangan + jumlah aset per jenis
+  - Tambah/edit/hapus (admin)
+  - Export/Import CSV (admin)
+- Setting identitas perusahaan (admin):
+  - Nama perusahaan, alamat, email, telepon, website, prefix ID aset
+  - Upload logo/favicon via modal progress + crop rasio 1:1
+  - Mendukung input PNG/JPG/WEBP/SVG
+- Barcode:
+  - Scan lewat kamera jika tersedia
+  - Fallback upload foto barcode (lebih kompatibel lintas device/browser)
+- UI:
+  - Snackbar untuk notifikasi sukses/warning/error (auto hide)
+  - Modal konfirmasi custom (bukan `alert/confirm` bawaan browser)
+  - Responsif desktop/mobile
+
+## Role dan Hak Akses
+
+| Modul/Fitur | Admin | Staff |
+| --- | --- | --- |
+| Tambah aset | Ya | Ya |
+| Manajemen aset: lihat/tambah/edit | Ya | Ya |
+| Manajemen aset: hapus | Ya | Tidak |
+| Manajemen aset: export/import CSV | Ya | Tidak |
+| Peminjaman: lihat/tambah/edit/kembalikan item | Ya | Ya |
+| Peminjaman: hapus | Ya | Tidak |
+| Peminjaman: export/import CSV | Ya | Tidak |
+| Jenis aset: lihat daftar | Ya | Ya |
+| Jenis aset: tambah/edit/hapus | Ya | Tidak |
+| Jenis aset: export/import CSV | Ya | Tidak |
+| Setting users | Ya | Tidak |
+| Setting identitas | Ya | Tidak |
+| Audit log | Ya | Tidak |
+
+Catatan:
+- Staff tetap bisa melihat branding perusahaan (menggunakan endpoint publik identitas).
+- Pembatasan role diterapkan di frontend dan backend.
 
 ## Teknologi
 
-- Go (net/http + chi router)
-- JWT (`github.com/golang-jwt/jwt/v5`)
-- SQLX (`github.com/jmoiron/sqlx`)
-- Driver DB:
-  - SQLite (`modernc.org/sqlite`)
-  - PostgreSQL (`github.com/jackc/pgx/v5/stdlib`)
-  - MySQL (`github.com/go-sql-driver/mysql`)
+- Go `1.22` (lihat `go.mod`)
+- Router: `github.com/go-chi/chi/v5`
+- DB access: `github.com/jmoiron/sqlx`
+- JWT: `github.com/golang-jwt/jwt/v5`
+- Barcode decode backend: `github.com/makiuchi-d/gozxing`
+- Driver database:
+  - SQLite: `modernc.org/sqlite`
+  - PostgreSQL: `github.com/jackc/pgx/v5/stdlib`
+  - MySQL: `github.com/go-sql-driver/mysql`
 - Frontend: HTML + CSS + Vanilla JavaScript
 
-## Menjalankan Aplikasi
+## Konfigurasi Environment
 
-1. Install Go 1.22+.
-2. Copy konfigurasi:
+Contoh `.env`:
+
+```env
+APP_NAME=RCK-Assets
+HTTP_ADDR=:8080
+
+# sqlite (default)
+DB_DRIVER=sqlite
+DB_DSN=data/rck_assets.db
+
+# untuk postgres:
+# DB_DRIVER=postgres
+# DB_DSN=postgres://postgres:postgres@localhost:5432/rck_assets?sslmode=disable
+
+# untuk mysql:
+# DB_DRIVER=mysql
+# DB_DSN=root:password@tcp(localhost:3306)/rck_assets?parseTime=true
+
+JWT_SECRET=ganti-secret-produksi
+TOKEN_TTL=12h
+DEFAULT_ADMIN_USERNAME=admin
+DEFAULT_ADMIN_PASSWORD=admin123
+```
+
+## Menjalankan Lokal
+
+1. Pastikan Go `1.22+`.
+2. Copy `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-3. Set environment variable dari `.env` (atau langsung export di shell).
-4. Jalankan:
+3. Jalankan:
 
 ```bash
 go mod tidy
 go run ./cmd/server
 ```
 
-5. Buka `http://localhost:8080`.
+4. Buka:
+- `http://localhost:8080` (atau sesuai `HTTP_ADDR`)
 
 Default login:
-
 - Username: `admin`
 - Password: `admin123`
 
-## Instalasi di Server Ubuntu 24.04
+## Build Binary
 
-Di bawah ini contoh deploy produksi menggunakan `systemd` + reverse proxy (Nginx).
-
-### 0) Pastikan Go 1.22+ (penting)
-
-Jika muncul error seperti:
+```bash
+go build -buildvcs=false -o rck-assets ./cmd/server
 ```
-go.mod file indicates go 1.22, but maximum version supported by tidy is 1.18
-```
-maka Go di server masih lama. Upgrade ke 1.22+ sebelum lanjut:
+
+`-buildvcs=false` penting jika environment server tidak lengkap metadata git dan muncul error `error obtaining VCS status`.
+
+## Instalasi Ubuntu 24.04 (systemd + reverse proxy)
+
+### 1) Install Go 1.22+
+
+Jika ada error:
+`go.mod file indicates go 1.22, but maximum version supported by tidy is 1.18`
+maka Go di server terlalu lama.
+
+Contoh upgrade manual:
 
 ```bash
 sudo apt remove -y golang-go || true
@@ -90,48 +156,41 @@ source /etc/profile.d/go.sh
 go version
 ```
 
-
-### 1) Siapkan user dan folder aplikasi
+### 2) Siapkan folder aplikasi
 
 ```bash
-sudo adduser --system --group --home /opt/rck-assets rckassets
 sudo mkdir -p /opt/rck-assets
-sudo chown -R rckassets:rckassets /opt/rck-assets
+sudo chown -R www-data:www-data /opt/rck-assets
 ```
 
-Upload kode ke `/opt/rck-assets` (git clone atau scp), lalu:
+Salin source ke `/opt/rck-assets`, lalu:
 
 ```bash
 cd /opt/rck-assets
 cp .env.example .env
+mkdir -p data data/uploads
 ```
 
-Edit `.env` sesuai kebutuhan. Untuk SQLite, pastikan `DB_DRIVER=sqlite` dan file DB berada di folder yang bisa ditulis.
-Disarankan gunakan path absolut agar tidak masalah di `systemd`:
-```
+Disarankan untuk SQLite gunakan path absolut agar konsisten saat dijalankan service:
+
+```env
+DB_DRIVER=sqlite
 DB_DSN=/opt/rck-assets/data/rck_assets.db
 ```
-### 2) Install dependency
 
-```bash
-sudo apt update
-sudo apt install -y golang-go nginx
-```
-
-### 3) Build aplikasi
+### 3) Build
 
 ```bash
 cd /opt/rck-assets
 go mod tidy
 go build -buildvcs=false -o rck-assets ./cmd/server
-sudo chown rckassets:rckassets rck-assets
+sudo chown www-data:www-data /opt/rck-assets/rck-assets
+sudo chmod +x /opt/rck-assets/rck-assets
 ```
-
-Catatan: jika build gagal dengan `error obtaining VCS status`, gunakan `-buildvcs=false` seperti di atas.
 
 ### 4) Buat service systemd
 
-Buat file ` /etc/systemd/system/rck-assets.service `:
+File: `/etc/systemd/system/rck-assets.service`
 
 ```ini
 [Unit]
@@ -139,8 +198,8 @@ Description=RCK Assets Management
 After=network.target
 
 [Service]
-User=rckassets
-Group=rckassets
+User=www-data
+Group=www-data
 WorkingDirectory=/opt/rck-assets
 EnvironmentFile=/opt/rck-assets/.env
 ExecStart=/opt/rck-assets/rck-assets
@@ -159,11 +218,9 @@ sudo systemctl enable --now rck-assets
 sudo systemctl status rck-assets
 ```
 
-Secara default aplikasi berjalan di `:8080`. Jika di `.env` kamu set `HTTP_ADDR` ke port lain (mis. `:8444`), sesuaikan semua `proxy_pass` ke port tersebut.
+### 5) Nginx reverse proxy
 
-### 5) Konfigurasi Nginx (reverse proxy)
-
-Buat config Nginx, misalnya ` /etc/nginx/sites-available/rck-assets `:
+Contoh:
 
 ```nginx
 server {
@@ -173,16 +230,15 @@ server {
     client_max_body_size 15m;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8080; # sesuaikan dengan HTTP_ADDR
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # SSE /api/events butuh buffering dimatikan
     location /api/events {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8080; # sesuaikan dengan HTTP_ADDR
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -196,89 +252,130 @@ server {
 Aktifkan:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/rck-assets /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Opsional: pasang SSL (Let's Encrypt) via `certbot`.
+## Deploy aaPanel / Panel Lain
 
-## Deploy via aaPanel / Panel Lain
+Jika memakai aaPanel, intinya Nginx tetap reverse proxy ke aplikasi Go.
 
-Jika memakai aaPanel, CyberPanel, Plesk, atau panel lain, intinya sama: buat site dan set reverse proxy ke aplikasi Go.
-
-**Pengaturan yang perlu diperhatikan:**
-
-- **Reverse proxy ke** `http://127.0.0.1:8080` (sesuaikan port dengan `HTTP_ADDR`)
-- **Header forward**: `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`
-- **Disable proxy buffering** untuk endpoint SSE ` /api/events `
-- **Max upload size** minimal `15m` (karena ada upload foto aset & logo)
-- **Matikan PHP** jika panel menambahkan konfigurasi PHP default
-
-Contoh aturan di panel (pseudo):
-
-- Route `/` -> `http://127.0.0.1:8080` (sesuaikan port)
-- Route `/api/events` -> `http://127.0.0.1:8080` (sesuaikan port) dengan `proxy_buffering off`
+Checklist:
+- Proxy target ke `http://127.0.0.1:<PORT_APP>`
+- Forward header:
+  - `Host`
+  - `X-Real-IP`
+  - `X-Forwarded-For`
+  - `X-Forwarded-Proto`
 - `client_max_body_size 15m`
+- Disable buffering untuk `/api/events`
+- Nonaktifkan include PHP default bila tidak dipakai
 
-Contoh reload nginx pada aaPanel:
+Command reload Nginx aaPanel:
 
 ```bash
 /www/server/nginx/sbin/nginx -t
 /www/server/nginx/sbin/nginx -s reload
 ```
 
-## Troubleshooting Umum
+## Endpoint API dan Akses
 
-- **Aplikasi tetap jalan di `:8080` padahal `.env` set `HTTP_ADDR`**  
-  Pastikan `EnvironmentFile` dan `WorkingDirectory` benar di `systemd`, lalu `daemon-reload` dan restart service.
-
-- **`connect database: unable to open database file (14)`**  
-  Folder DB tidak writable. Pastikan owner/permission dan gunakan path absolut di `DB_DSN`.
-
-- **`attempt to write a readonly database (8)`**  
-  User service tidak punya izin write ke file SQLite. Samakan user service dengan owner folder/DB.
-
-- **`error obtaining VCS status` saat build**  
-  Gunakan `go build -buildvcs=false ...`.
-
-- **Domain tidak bisa diakses**  
-  Cek DNS A record mengarah ke IP server. Jika `dig` belum resolve, tunggu propagasi.
-
-## Catatan Database Produksi
-
-- **SQLite** cocok untuk kebutuhan ringan/menengah, pastikan folder `data/` bisa ditulis.
-- **PostgreSQL/MySQL** disarankan untuk skala lebih besar:
-  - Set `DB_DRIVER=postgres` atau `DB_DRIVER=mysql`
-  - Isi `DB_DSN` sesuai koneksi database produksi
-
-## Endpoint API Utama
-
+Public:
+- `GET /api/health`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `GET /api/settings/company/public`
+
+Authenticated (admin + staff):
 - `GET /api/auth/me`
+- `GET /api/events`
+- `GET /api/asset-types`
+- `GET /api/assets`
+- `GET /api/assets/search`
+- `GET /api/assets/next-id`
+- `POST /api/barcode/decode`
+- `POST /api/assets`
+- `POST /api/assets/{id}/photo`
+- `PUT /api/assets/{id}`
+- `GET /api/loans`
+- `POST /api/loans`
+- `PUT /api/loans/{id}`
+- `POST /api/loans/{id}/items/{itemId}/return`
+
+Admin only:
 - `GET /api/settings/company`
 - `PUT /api/settings/company`
 - `POST /api/settings/company/logo`
 - `POST /api/settings/company/favicon`
-- `GET /api/settings/company/public`
-- `GET /api/events` (SSE)
-- `GET /api/asset-types`
-- `POST /api/asset-types` (admin)
-- `DELETE /api/asset-types/{id}` (admin)
-- `GET /api/users` (admin)
-- `POST /api/users` (admin)
-- `PUT /api/users/{id}` (admin)
-- `DELETE /api/users/{id}` (admin)
-- `GET /api/assets`
+- `POST /api/asset-types`
+- `PUT /api/asset-types/{id}`
+- `DELETE /api/asset-types/{id}`
+- `GET /api/asset-types/export.csv`
+- `POST /api/asset-types/import.csv`
 - `GET /api/assets/export.csv`
-- `POST /api/assets`
-- `POST /api/assets/{id}/photo`
-- `PUT /api/assets/{id}`
+- `POST /api/assets/import.csv`
 - `DELETE /api/assets/{id}`
+- `GET /api/loans/export.csv`
+- `POST /api/loans/import.csv`
+- `DELETE /api/loans/{id}`
+- `GET /api/users`
+- `POST /api/users`
+- `PUT /api/users/{id}`
+- `DELETE /api/users/{id}`
+- `GET /api/audit-logs`
 
-## Catatan Keamanan
+## Testing
 
-- Password disimpan menggunakan bcrypt hash.
-- Autentikasi memakai JWT dengan dukungan cookie `HttpOnly` dan `Authorization: Bearer <token>`.
-- Kontrol akses role-based (`admin` vs `staff`) di layer API.
+Jalankan semua test:
+
+```bash
+go test ./...
+```
+
+Test authorization khusus endpoint:
+
+```bash
+go test ./internal/http -run Authorization -v
+```
+
+## Troubleshooting
+
+- `status=203/EXEC` pada `systemd`:
+  - Cek path `ExecStart` benar dan binary executable.
+  - Pastikan file ada, contoh: `/opt/rck-assets/rck-assets`.
+
+- `Failed to load environment files`:
+  - Cek `EnvironmentFile` mengarah ke file `.env` yang benar.
+
+- App tetap jalan di `:8080` padahal `.env` sudah `:8444`:
+  - Pastikan service membaca `.env` yang benar.
+  - Jalankan:
+    - `sudo systemctl daemon-reload`
+    - `sudo systemctl restart rck-assets`
+
+- `connect database: unable to open database file` atau `readonly database`:
+  - Path `DB_DSN` salah atau tidak writable.
+  - Pastikan user service punya izin write ke folder `data`.
+
+- `error obtaining VCS status` saat build:
+  - Gunakan `go build -buildvcs=false ...`.
+
+- Domain tidak resolve:
+  - Pastikan DNS A record sudah mengarah ke IP server.
+
+- Reverse proxy jalan tapi domain belum tembus:
+  - Validasi lokal dulu:
+    - `curl -I http://127.0.0.1:<PORT_APP>`
+  - Lalu validasi via domain dan log Nginx.
+
+- Scanner kamera tidak siap:
+  - Beri izin kamera di browser.
+  - Gunakan fallback upload foto barcode jika kamera/live scanner tidak tersedia.
+
+## Keamanan
+
+- Password disimpan dengan bcrypt hash.
+- JWT disimpan sebagai cookie `HttpOnly`, juga mendukung header `Authorization: Bearer`.
+- CSRF protection untuk request write.
+- Security headers aktif (`CSP`, `X-Frame-Options`, `Referrer-Policy`, dll).
+- Role-based authorization di backend.
