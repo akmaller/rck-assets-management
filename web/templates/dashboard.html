@@ -283,6 +283,7 @@
         <p class="muted">Tambahkan kategori/jenis aset agar konsisten pada input.</p>
         <div class="section-actions">
           <button type="button" class="btn btn-outline" id="export-types">Export CSV</button>
+          <button type="button" class="btn btn-outline" id="import-types">Import CSV</button>
         </div>
 
         <form id="type-form" class="form-grid" novalidate>
@@ -320,6 +321,7 @@
         <h3>Manajemen Aset</h3>
         <div class="section-actions">
           <button type="button" class="btn btn-outline" id="export-assets">Export CSV</button>
+          <button type="button" class="btn btn-outline" id="import-assets">Import CSV</button>
           <button type="button" class="btn btn-outline" id="asset-filter-toggle">Filter</button>
           <button type="button" class="btn btn-primary" id="asset-form-toggle">Tambah Aset</button>
         </div>
@@ -429,6 +431,7 @@
         <p class="muted">Catat aset yang dipinjam oleh pihak lain.</p>
         <div class="section-actions">
           <button type="button" class="btn btn-outline" id="export-loans">Export CSV</button>
+          <button type="button" class="btn btn-outline" id="import-loans">Import CSV</button>
           <button type="button" class="btn btn-outline" id="loan-filter-toggle">Filter</button>
         </div>
 
@@ -551,6 +554,35 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="import-backdrop" hidden></div>
+  <div class="modal import-modal" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" hidden>
+    <div class="modal-card import-card">
+      <div class="modal-header">
+        <strong id="import-title">Import CSV</strong>
+        <button type="button" class="icon-btn import-close" id="import-close" aria-label="Tutup dialog import">
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small" id="import-hint">Upload file CSV sesuai format hasil export.</p>
+        <label class="import-file-label" for="import-file-input">Pilih file CSV</label>
+        <input type="file" id="import-file-input" accept=".csv,text/csv">
+        <p class="muted small" id="import-file-name">Belum ada file dipilih.</p>
+        <div class="import-progress" id="import-progress" hidden>
+          <div class="import-progress-track">
+            <span class="import-progress-fill" id="import-progress-fill"></span>
+          </div>
+          <small class="muted small" id="import-progress-text">0%</small>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="import-cancel">Batal</button>
+        <button type="button" class="btn btn-primary" id="import-submit">Upload</button>
+      </div>
+    </div>
+  </div>
+
   <div class="scan-modal" id="scan-modal" aria-hidden="true">
     <div class="scan-card">
       <div class="scan-header">
@@ -570,6 +602,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-15" defer></script>
+  <script src="/static/app.js?v=20260208-16" defer></script>
 </body>
 </html>

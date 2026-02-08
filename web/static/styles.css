@@ -1156,6 +1156,67 @@ td .row-actions {
   margin-top: -7px;
 }
 
+.import-modal {
+  z-index: 63;
+}
+
+#import-backdrop {
+  z-index: 62;
+}
+
+.import-card {
+  width: min(520px, 94vw);
+}
+
+.import-close {
+  width: 34px;
+  height: 34px;
+}
+
+.import-close span {
+  width: 16px;
+}
+
+.import-close span:first-child {
+  transform: rotate(45deg);
+}
+
+.import-close span:last-child {
+  transform: rotate(-45deg);
+  margin-top: -7px;
+}
+
+.import-file-label {
+  display: inline-block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+#import-file-input {
+  width: 100%;
+}
+
+.import-progress {
+  margin-top: 0.75rem;
+}
+
+.import-progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--gray-300);
+  background: #f2f2ef;
+  overflow: hidden;
+}
+
+.import-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #cc2f2f 0%, #991a1a 100%);
+  transition: width 0.18s ease;
+}
+
 @media (max-width: 980px) {
   .asset-photo-card {
     width: min(94vw, 720px);

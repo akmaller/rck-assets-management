@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1276,6 +1277,627 @@ func (h *Handler) ExportLoansCSV(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
 	}
 }
 
+func (h *Handler) ImportAssetTypesCSV(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	records, err := readCSVUpload(w, r, 10<<20)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+	if len(records) < 2 {
+		writeError(w, stdhttp.StatusBadRequest, "file CSV tidak berisi data")
+		return
+	}
+
+	header := csvHeaderIndex(records[0])
+	nameCol, ok := findCSVColumn(header, "nama jenis", "name")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV jenis aset tidak sesuai header export")
+		return
+	}
+	descriptionCol, _ := findCSVColumn(header, "keterangan", "description")
+
+	existingTypes, err := h.store.ListAssetTypes()
+	if err != nil {
+		writeError(w, stdhttp.StatusInternalServerError, "gagal mengambil jenis aset")
+		return
+	}
+	typesByName := map[string]store.AssetType{}
+	for _, item := range existingTypes {
+		typesByName[normalizeTextKey(item.Name)] = item
+	}
+
+	var processed, created, updated int
+	for i, record := range records[1:] {
+		line := i + 2
+		if csvRecordEmpty(record) {
+			continue
+		}
+		name := strings.TrimSpace(csvColumn(record, nameCol))
+		if len(name) < 2 {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: nama jenis minimal 2 karakter", line))
+			return
+		}
+		description := strings.TrimSpace(csvColumn(record, descriptionCol))
+		key := normalizeTextKey(name)
+		if current, exists := typesByName[key]; exists {
+			result, err := h.store.UpdateAssetType(current.ID, store.UpdateAssetTypeInput{
+				Name:        name,
+				Description: description,
+			})
+			if err != nil {
+				if isUniqueError(err) {
+					writeError(w, stdhttp.StatusConflict, fmt.Sprintf("baris %d: nama jenis sudah digunakan", line))
+					return
+				}
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal mengubah jenis aset", line))
+				return
+			}
+			typesByName[key] = result
+			updated++
+		} else {
+			result, err := h.store.CreateAssetType(store.CreateAssetTypeInput{
+				Name:        name,
+				Description: description,
+			})
+			if err != nil {
+				if isUniqueError(err) {
+					writeError(w, stdhttp.StatusConflict, fmt.Sprintf("baris %d: nama jenis sudah digunakan", line))
+					return
+				}
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal menambah jenis aset", line))
+				return
+			}
+			typesByName[key] = result
+			created++
+		}
+		processed++
+	}
+
+	if processed == 0 {
+		writeError(w, stdhttp.StatusBadRequest, "tidak ada baris data valid untuk diimport")
+		return
+	}
+
+	message := fmt.Sprintf(
+		"import jenis aset selesai: diproses %d, ditambah %d, diubah %d",
+		processed,
+		created,
+		updated,
+	)
+	writeJSON(w, stdhttp.StatusOK, map[string]any{
+		"message":   message,
+		"processed": processed,
+		"created":   created,
+		"updated":   updated,
+	})
+	h.audit(r, "import", "asset_type", int64(processed), fmt.Sprintf("created=%d updated=%d", created, updated))
+	h.notify("asset_types")
+}
+
+func (h *Handler) ImportAssetsCSV(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	records, err := readCSVUpload(w, r, 20<<20)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+	if len(records) < 2 {
+		writeError(w, stdhttp.StatusBadRequest, "file CSV tidak berisi data")
+		return
+	}
+
+	header := csvHeaderIndex(records[0])
+	assetCodeCol, ok := findCSVColumn(header, "asset code", "asset_code", "kode aset", "id aset")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV aset tidak sesuai header export")
+		return
+	}
+	nameCol, ok := findCSVColumn(header, "nama", "name")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV aset tidak sesuai header export")
+		return
+	}
+	typeNameCol, ok := findCSVColumn(header, "jenis", "jenis aset", "asset type", "asset_type")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV aset tidak sesuai header export")
+		return
+	}
+	purchaseDateCol, ok := findCSVColumn(header, "tanggal pembelian", "purchase date", "purchase_date", "tgl beli")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV aset tidak sesuai header export")
+		return
+	}
+	conditionCol, ok := findCSVColumn(header, "kondisi", "condition")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV aset tidak sesuai header export")
+		return
+	}
+	barcodeCol, _ := findCSVColumn(header, "barcode")
+	photoURLCol, _ := findCSVColumn(header, "foto url", "photo url", "foto", "photo")
+
+	existingTypes, err := h.store.ListAssetTypes()
+	if err != nil {
+		writeError(w, stdhttp.StatusInternalServerError, "gagal mengambil jenis aset")
+		return
+	}
+	typesByName := map[string]store.AssetType{}
+	for _, item := range existingTypes {
+		typesByName[normalizeTextKey(item.Name)] = item
+	}
+
+	resolveType := func(typeName string, line int) (store.AssetType, error) {
+		key := normalizeTextKey(typeName)
+		if key == "" {
+			return store.AssetType{}, fmt.Errorf("baris %d: jenis aset wajib diisi", line)
+		}
+		if item, ok := typesByName[key]; ok {
+			return item, nil
+		}
+
+		createdType, err := h.store.CreateAssetType(store.CreateAssetTypeInput{
+			Name:        strings.TrimSpace(typeName),
+			Description: "",
+		})
+		if err != nil {
+			if isUniqueError(err) {
+				latestTypes, reloadErr := h.store.ListAssetTypes()
+				if reloadErr != nil {
+					return store.AssetType{}, fmt.Errorf("baris %d: gagal memvalidasi jenis aset", line)
+				}
+				for _, t := range latestTypes {
+					typesByName[normalizeTextKey(t.Name)] = t
+				}
+				if item, ok := typesByName[key]; ok {
+					return item, nil
+				}
+			}
+			return store.AssetType{}, fmt.Errorf("baris %d: gagal menambah jenis aset %q", line, strings.TrimSpace(typeName))
+		}
+		typesByName[key] = createdType
+		return createdType, nil
+	}
+
+	var processed, created, updated, autoCreatedTypes int
+	for i, record := range records[1:] {
+		line := i + 2
+		if csvRecordEmpty(record) {
+			continue
+		}
+
+		assetCode := strings.TrimSpace(csvColumn(record, assetCodeCol))
+		name := strings.TrimSpace(csvColumn(record, nameCol))
+		typeName := strings.TrimSpace(csvColumn(record, typeNameCol))
+		purchaseDate := strings.TrimSpace(csvColumn(record, purchaseDateCol))
+		condition := strings.TrimSpace(csvColumn(record, conditionCol))
+		barcode := strings.TrimSpace(csvColumn(record, barcodeCol))
+		photoURL := strings.TrimSpace(csvColumn(record, photoURLCol))
+
+		if assetCode == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: asset code wajib diisi", line))
+			return
+		}
+		if name == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: nama aset wajib diisi", line))
+			return
+		}
+		if purchaseDate == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: tanggal pembelian wajib diisi", line))
+			return
+		}
+		if _, err := time.Parse("2006-01-02", purchaseDate); err != nil {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: format tanggal pembelian harus YYYY-MM-DD", line))
+			return
+		}
+		if condition == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: kondisi aset wajib diisi", line))
+			return
+		}
+
+		typeKey := normalizeTextKey(typeName)
+		_, typeExistsBefore := typesByName[typeKey]
+		assetType, err := resolveType(typeName, line)
+		if err != nil {
+			writeError(w, stdhttp.StatusBadRequest, err.Error())
+			return
+		}
+		if !typeExistsBefore {
+			autoCreatedTypes++
+		}
+
+		existingAsset, getErr := h.store.GetAssetByCode(assetCode)
+		if getErr != nil && !errors.Is(getErr, store.ErrNotFound) {
+			writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal memuat aset", line))
+			return
+		}
+
+		if errors.Is(getErr, store.ErrNotFound) {
+			seq, err := h.store.NextAssetSequence()
+			if err != nil {
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal menghitung sequence aset", line))
+				return
+			}
+			if barcode == "" {
+				barcode = generateAutoBarcode()
+			}
+
+			createdAsset, err := h.store.CreateAsset(store.CreateAssetInput{
+				AssetCode:     assetCode,
+				Name:          name,
+				PurchaseDate:  purchaseDate,
+				Condition:     condition,
+				AssetTypeID:   assetType.ID,
+				AssetSequence: seq,
+				Barcode:       barcode,
+			})
+			if err != nil {
+				if isUniqueError(err) {
+					writeError(w, stdhttp.StatusConflict, fmt.Sprintf("baris %d: asset code atau barcode sudah digunakan", line))
+					return
+				}
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal menambah aset", line))
+				return
+			}
+			if photoURL != "" {
+				if _, err := h.store.UpdateAssetPhoto(createdAsset.ID, photoURL, photoURL); err != nil {
+					writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal menyimpan foto aset", line))
+					return
+				}
+			}
+			created++
+		} else {
+			if barcode == "" {
+				barcode = existingAsset.Barcode
+			}
+			if barcode == "" {
+				barcode = generateAutoBarcode()
+			}
+			updatedAsset, err := h.store.UpdateAsset(existingAsset.ID, store.UpdateAssetInput{
+				AssetCode:    assetCode,
+				Name:         name,
+				PurchaseDate: purchaseDate,
+				Condition:    condition,
+				AssetTypeID:  assetType.ID,
+				Barcode:      barcode,
+			})
+			if err != nil {
+				if isUniqueError(err) {
+					writeError(w, stdhttp.StatusConflict, fmt.Sprintf("baris %d: asset code atau barcode sudah digunakan", line))
+					return
+				}
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal mengubah aset", line))
+				return
+			}
+			if photoURL != "" {
+				if _, err := h.store.UpdateAssetPhoto(updatedAsset.ID, photoURL, photoURL); err != nil {
+					writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("baris %d: gagal menyimpan foto aset", line))
+					return
+				}
+			}
+			updated++
+		}
+		processed++
+	}
+
+	if processed == 0 {
+		writeError(w, stdhttp.StatusBadRequest, "tidak ada baris data valid untuk diimport")
+		return
+	}
+
+	message := fmt.Sprintf(
+		"import aset selesai: diproses %d, ditambah %d, diubah %d, jenis otomatis %d",
+		processed,
+		created,
+		updated,
+		autoCreatedTypes,
+	)
+	writeJSON(w, stdhttp.StatusOK, map[string]any{
+		"message":            message,
+		"processed":          processed,
+		"created":            created,
+		"updated":            updated,
+		"auto_created_types": autoCreatedTypes,
+	})
+	h.audit(
+		r,
+		"import",
+		"asset",
+		int64(processed),
+		fmt.Sprintf("created=%d updated=%d auto_types=%d", created, updated, autoCreatedTypes),
+	)
+	h.notify("assets")
+	if autoCreatedTypes > 0 {
+		h.notify("asset_types")
+	}
+}
+
+func (h *Handler) ImportLoansCSV(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	records, err := readCSVUpload(w, r, 20<<20)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+	if len(records) < 2 {
+		writeError(w, stdhttp.StatusBadRequest, "file CSV tidak berisi data")
+		return
+	}
+
+	header := csvHeaderIndex(records[0])
+	loanIDCol, _ := findCSVColumn(header, "loan id", "id peminjaman")
+	borrowerCol, ok := findCSVColumn(header, "nama peminjam", "borrower")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV peminjaman tidak sesuai header export")
+		return
+	}
+	contactCol, _ := findCSVColumn(header, "kontak", "contact")
+	borrowDateCol, ok := findCSVColumn(header, "tanggal pinjam", "borrow date", "borrow_date")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV peminjaman tidak sesuai header export")
+		return
+	}
+	assetCodeCol, ok := findCSVColumn(header, "kode aset", "asset code", "asset_code")
+	if !ok {
+		writeError(w, stdhttp.StatusBadRequest, "format CSV peminjaman tidak sesuai header export")
+		return
+	}
+	returnDateCol, _ := findCSVColumn(header, "tanggal kembali", "return date", "return_date")
+	notesCol, _ := findCSVColumn(header, "catatan", "notes")
+
+	type loanImportItem struct {
+		Line       int
+		AssetCode  string
+		ReturnDate string
+	}
+	type loanImportGroup struct {
+		Line            int
+		Key             string
+		BorrowerName    string
+		BorrowerContact string
+		BorrowDate      string
+		Notes           string
+		Items           []loanImportItem
+	}
+
+	groups := map[string]*loanImportGroup{}
+	order := make([]string, 0, len(records))
+	for i, record := range records[1:] {
+		line := i + 2
+		if csvRecordEmpty(record) {
+			continue
+		}
+
+		loanKey := strings.TrimSpace(csvColumn(record, loanIDCol))
+		if loanKey == "" {
+			loanKey = fmt.Sprintf("row-%d", line)
+		}
+		borrowerName := strings.TrimSpace(csvColumn(record, borrowerCol))
+		borrowerContact := strings.TrimSpace(csvColumn(record, contactCol))
+		borrowDate := strings.TrimSpace(csvColumn(record, borrowDateCol))
+		assetCode := strings.TrimSpace(csvColumn(record, assetCodeCol))
+		returnDate := strings.TrimSpace(csvColumn(record, returnDateCol))
+		notes := strings.TrimSpace(csvColumn(record, notesCol))
+
+		if borrowerName == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: nama peminjam wajib diisi", line))
+			return
+		}
+		if borrowDate == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: tanggal pinjam wajib diisi", line))
+			return
+		}
+		if _, err := time.Parse("2006-01-02", borrowDate); err != nil {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: format tanggal pinjam harus YYYY-MM-DD", line))
+			return
+		}
+		if assetCode == "" {
+			writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: kode aset wajib diisi", line))
+			return
+		}
+		if returnDate != "" {
+			if _, err := time.Parse("2006-01-02", returnDate); err != nil {
+				writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: format tanggal kembali harus YYYY-MM-DD", line))
+				return
+			}
+		}
+
+		group, exists := groups[loanKey]
+		if !exists {
+			group = &loanImportGroup{
+				Line:            line,
+				Key:             loanKey,
+				BorrowerName:    borrowerName,
+				BorrowerContact: borrowerContact,
+				BorrowDate:      borrowDate,
+				Notes:           notes,
+				Items:           make([]loanImportItem, 0, 4),
+			}
+			groups[loanKey] = group
+			order = append(order, loanKey)
+		} else {
+			if group.BorrowerName != borrowerName || group.BorrowDate != borrowDate || group.Notes != notes || group.BorrowerContact != borrowerContact {
+				writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: data header peminjaman tidak konsisten untuk loan id %q", line, loanKey))
+				return
+			}
+		}
+
+		group.Items = append(group.Items, loanImportItem{
+			Line:       line,
+			AssetCode:  assetCode,
+			ReturnDate: returnDate,
+		})
+	}
+
+	if len(groups) == 0 {
+		writeError(w, stdhttp.StatusBadRequest, "tidak ada baris data valid untuk diimport")
+		return
+	}
+
+	groupList := make([]loanImportGroup, 0, len(order))
+	for _, key := range order {
+		group := groups[key]
+		if group == nil {
+			continue
+		}
+		groupList = append(groupList, *group)
+	}
+	sort.Slice(groupList, func(i, j int) bool {
+		if groupList[i].BorrowDate == groupList[j].BorrowDate {
+			return groupList[i].Line < groupList[j].Line
+		}
+		return groupList[i].BorrowDate < groupList[j].BorrowDate
+	})
+
+	assetIDCache := map[string]int64{}
+	resolveAssetID := func(assetCode string, line int) (int64, error) {
+		key := normalizeTextKey(assetCode)
+		if key == "" {
+			return 0, fmt.Errorf("baris %d: kode aset wajib diisi", line)
+		}
+		if assetID, ok := assetIDCache[key]; ok {
+			return assetID, nil
+		}
+		asset, err := h.store.GetAssetByCode(assetCode)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return 0, fmt.Errorf("baris %d: aset %q tidak ditemukan", line, assetCode)
+			}
+			return 0, fmt.Errorf("baris %d: gagal memvalidasi aset %q", line, assetCode)
+		}
+		assetIDCache[key] = asset.ID
+		return asset.ID, nil
+	}
+
+	var createdLoans, updatedLoans, returnedItems int
+	for _, group := range groupList {
+		seenAssetCode := map[string]struct{}{}
+		assetIDs := make([]int64, 0, len(group.Items))
+		returnByCode := map[string]string{}
+		for _, item := range group.Items {
+			key := normalizeTextKey(item.AssetCode)
+			if _, exists := seenAssetCode[key]; exists {
+				writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("baris %d: kode aset duplikat dalam satu peminjaman", item.Line))
+				return
+			}
+			seenAssetCode[key] = struct{}{}
+			assetID, err := resolveAssetID(item.AssetCode, item.Line)
+			if err != nil {
+				writeError(w, stdhttp.StatusBadRequest, err.Error())
+				return
+			}
+			assetIDs = append(assetIDs, assetID)
+			returnByCode[key] = strings.TrimSpace(item.ReturnDate)
+		}
+
+		targetLoanID := int64(0)
+		useUpdate := false
+		if parsedLoanID, parseErr := strconv.ParseInt(strings.TrimSpace(group.Key), 10, 64); parseErr == nil && parsedLoanID > 0 {
+			_, loanErr := h.store.GetLoanByID(parsedLoanID)
+			if loanErr == nil {
+				useUpdate = true
+				targetLoanID = parsedLoanID
+			} else if !errors.Is(loanErr, store.ErrNotFound) {
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("gagal memvalidasi loan id %q", group.Key))
+				return
+			}
+		}
+
+		for _, item := range group.Items {
+			if strings.TrimSpace(item.ReturnDate) != "" {
+				continue
+			}
+			assetID, err := resolveAssetID(item.AssetCode, item.Line)
+			if err != nil {
+				writeError(w, stdhttp.StatusBadRequest, err.Error())
+				return
+			}
+			exists, err := h.store.ActiveLoanExists(assetID, targetLoanID)
+			if err != nil {
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("gagal memeriksa status aset %q", item.AssetCode))
+				return
+			}
+			if exists {
+				writeError(w, stdhttp.StatusConflict, fmt.Sprintf("baris %d: aset %q masih dipinjam", item.Line, item.AssetCode))
+				return
+			}
+		}
+
+		var savedLoan store.Loan
+		if useUpdate {
+			updatedLoan, err := h.store.UpdateLoan(targetLoanID, store.UpdateLoanInput{
+				BorrowerName:    group.BorrowerName,
+				BorrowerContact: group.BorrowerContact,
+				BorrowDate:      group.BorrowDate,
+				Notes:           group.Notes,
+				AssetIDs:        assetIDs,
+			})
+			if err != nil {
+				if errors.Is(err, store.ErrNotFound) {
+					writeError(w, stdhttp.StatusNotFound, fmt.Sprintf("loan id %q tidak ditemukan", group.Key))
+					return
+				}
+				if isUniqueError(err) || errors.Is(err, store.ErrConflict) {
+					writeError(w, stdhttp.StatusConflict, fmt.Sprintf("gagal import loan %q: konflik data aset yang sedang dipinjam", group.Key))
+					return
+				}
+				writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("gagal update loan %q: %v", group.Key, err))
+				return
+			}
+			savedLoan = updatedLoan
+			updatedLoans++
+		} else {
+			createdLoan, err := h.store.CreateLoan(store.CreateLoanInput{
+				BorrowerName:    group.BorrowerName,
+				BorrowerContact: group.BorrowerContact,
+				BorrowDate:      group.BorrowDate,
+				Notes:           group.Notes,
+				AssetIDs:        assetIDs,
+			})
+			if err != nil {
+				if isUniqueError(err) || errors.Is(err, store.ErrConflict) {
+					writeError(w, stdhttp.StatusConflict, fmt.Sprintf("gagal import loan %q: konflik data aset yang sedang dipinjam", group.Key))
+					return
+				}
+				writeError(w, stdhttp.StatusBadRequest, fmt.Sprintf("gagal import loan %q: %v", group.Key, err))
+				return
+			}
+			savedLoan = createdLoan
+			createdLoans++
+		}
+
+		itemByCode := map[string]store.LoanItem{}
+		for _, createdItem := range savedLoan.Items {
+			itemByCode[normalizeTextKey(createdItem.AssetCode)] = createdItem
+		}
+		for codeKey, returnDate := range returnByCode {
+			loanItem, ok := itemByCode[codeKey]
+			if !ok {
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("gagal menandai return untuk loan %q: item aset tidak ditemukan", group.Key))
+				return
+			}
+			if _, err := h.store.MarkLoanItemReturned(savedLoan.ID, loanItem.ID, returnDate); err != nil {
+				writeError(w, stdhttp.StatusInternalServerError, fmt.Sprintf("gagal menandai return untuk loan %q", group.Key))
+				return
+			}
+			if returnDate != "" {
+				returnedItems++
+			}
+		}
+	}
+
+	message := fmt.Sprintf(
+		"import peminjaman selesai: loan dibuat %d, loan diupdate %d, item dikembalikan %d",
+		createdLoans,
+		updatedLoans,
+		returnedItems,
+	)
+	writeJSON(w, stdhttp.StatusOK, map[string]any{
+		"message":        message,
+		"created_loans":  createdLoans,
+		"updated_loans":  updatedLoans,
+		"returned_items": returnedItems,
+	})
+	h.audit(r, "import", "loan", int64(createdLoans+updatedLoans), fmt.Sprintf("created=%d updated=%d returned_items=%d", createdLoans, updatedLoans, returnedItems))
+	h.notify("loans")
+}
+
 func (h *Handler) ListLoans(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	limit := 20
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
@@ -1689,6 +2311,91 @@ func (h *Handler) setAuthCookie(w stdhttp.ResponseWriter, token string, r *stdht
 		MaxAge:   int(h.cfg.TokenTTL.Seconds()),
 		Expires:  time.Now().Add(h.cfg.TokenTTL),
 	})
+}
+
+func readCSVUpload(w stdhttp.ResponseWriter, r *stdhttp.Request, maxBytes int64) ([][]string, error) {
+	if r == nil {
+		return nil, errors.New("request tidak valid")
+	}
+	r.Body = stdhttp.MaxBytesReader(w, r.Body, maxBytes)
+	if err := r.ParseMultipartForm(maxBytes); err != nil {
+		return nil, errors.New("file terlalu besar atau form tidak valid")
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		return nil, errors.New("file CSV tidak ditemukan")
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+	reader.FieldsPerRecord = -1
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, errors.New("format CSV tidak valid")
+	}
+	if len(records) == 0 {
+		return nil, errors.New("file CSV kosong")
+	}
+	return records, nil
+}
+
+func csvHeaderIndex(header []string) map[string]int {
+	index := make(map[string]int, len(header))
+	for i, raw := range header {
+		key := normalizeCSVHeader(raw)
+		if key == "" {
+			continue
+		}
+		index[key] = i
+	}
+	return index
+}
+
+func findCSVColumn(index map[string]int, names ...string) (int, bool) {
+	for _, name := range names {
+		key := normalizeCSVHeader(name)
+		if key == "" {
+			continue
+		}
+		if i, ok := index[key]; ok {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func csvColumn(record []string, idx int) string {
+	if idx < 0 || idx >= len(record) {
+		return ""
+	}
+	return record[idx]
+}
+
+func csvRecordEmpty(record []string) bool {
+	for _, value := range record {
+		if strings.TrimSpace(strings.TrimPrefix(value, "\ufeff")) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizeCSVHeader(value string) string {
+	value = strings.TrimSpace(strings.TrimPrefix(value, "\ufeff"))
+	value = strings.ToLower(value)
+	value = strings.ReplaceAll(value, "_", " ")
+	value = strings.ReplaceAll(value, "-", " ")
+	value = strings.Join(strings.Fields(value), " ")
+	return value
+}
+
+func normalizeTextKey(value string) string {
+	value = strings.TrimSpace(strings.TrimPrefix(value, "\ufeff"))
+	value = strings.ToLower(value)
+	value = strings.Join(strings.Fields(value), " ")
+	return value
 }
 
 func decodeJSON(r *stdhttp.Request, dst any) error {

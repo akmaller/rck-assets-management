@@ -106,8 +106,23 @@
     loanAddAsset: document.getElementById("loan-add-asset"),
     loanSelectedAssets: document.getElementById("loan-selected-assets"),
     exportAssets: document.getElementById("export-assets"),
+    importAssets: document.getElementById("import-assets"),
     exportTypes: document.getElementById("export-types"),
+    importTypes: document.getElementById("import-types"),
     exportLoans: document.getElementById("export-loans"),
+    importLoans: document.getElementById("import-loans"),
+    importModal: document.getElementById("import-modal"),
+    importBackdrop: document.getElementById("import-backdrop"),
+    importTitle: document.getElementById("import-title"),
+    importHint: document.getElementById("import-hint"),
+    importClose: document.getElementById("import-close"),
+    importFileInput: document.getElementById("import-file-input"),
+    importFileName: document.getElementById("import-file-name"),
+    importProgress: document.getElementById("import-progress"),
+    importProgressFill: document.getElementById("import-progress-fill"),
+    importProgressText: document.getElementById("import-progress-text"),
+    importCancel: document.getElementById("import-cancel"),
+    importSubmit: document.getElementById("import-submit"),
     scanModal: document.getElementById("scan-modal"),
     scanVideo: document.getElementById("scan-video"),
     scanClose: document.getElementById("scan-close"),
@@ -1675,6 +1690,215 @@
     });
   };
 
+  const setupImportDialog = () => {
+    if (!els.importModal || !els.importBackdrop || !els.importSubmit || !els.importFileInput) return;
+
+    const IMPORT_ANIM_MS = 180;
+    const importConfigs = {
+      assets: {
+        key: "assets",
+        title: "Import CSV Manajemen Aset",
+        hint: "Gunakan file hasil Export CSV dari menu Manajemen Aset.",
+        endpoint: "/api/assets/import.csv",
+      },
+      types: {
+        key: "types",
+        title: "Import CSV Jenis Aset",
+        hint: "Gunakan file hasil Export CSV dari menu Jenis Aset.",
+        endpoint: "/api/asset-types/import.csv",
+      },
+      loans: {
+        key: "loans",
+        title: "Import CSV Peminjaman",
+        hint: "Gunakan file hasil Export CSV dari menu Peminjaman.",
+        endpoint: "/api/loans/import.csv",
+      },
+    };
+
+    let activeImportConfig = null;
+    let importUploading = false;
+
+    const parseJSON = (raw) => {
+      try {
+        return JSON.parse(raw || "{}");
+      } catch (_) {
+        return {};
+      }
+    };
+
+    const updateProgress = (percent) => {
+      const value = Math.max(0, Math.min(100, Number(percent) || 0));
+      if (els.importProgressFill) {
+        els.importProgressFill.style.width = `${value}%`;
+      }
+      if (els.importProgressText) {
+        els.importProgressText.textContent = `${Math.round(value)}%`;
+      }
+    };
+
+    const resetImportForm = () => {
+      if (els.importFileInput) {
+        els.importFileInput.value = "";
+      }
+      if (els.importFileName) {
+        els.importFileName.textContent = "Belum ada file dipilih.";
+      }
+      if (els.importProgress) {
+        els.importProgress.hidden = true;
+      }
+      updateProgress(0);
+    };
+
+    const setImportBusy = (busy) => {
+      importUploading = Boolean(busy);
+      if (els.importSubmit) {
+        els.importSubmit.disabled = importUploading;
+        els.importSubmit.textContent = importUploading ? "Mengupload..." : "Upload";
+      }
+      if (els.importCancel) {
+        els.importCancel.disabled = importUploading;
+      }
+      if (els.importClose) {
+        els.importClose.disabled = importUploading;
+      }
+      if (els.importFileInput) {
+        els.importFileInput.disabled = importUploading;
+      }
+    };
+
+    const openImportModal = (key) => {
+      const config = importConfigs[key];
+      if (!config) return;
+      activeImportConfig = config;
+      setImportBusy(false);
+      resetImportForm();
+      if (els.importTitle) {
+        els.importTitle.textContent = config.title;
+      }
+      if (els.importHint) {
+        els.importHint.textContent = config.hint;
+      }
+      els.importModal.hidden = false;
+      els.importBackdrop.hidden = false;
+      requestAnimationFrame(() => {
+        els.importModal.classList.add("show");
+        els.importBackdrop.classList.add("show");
+      });
+    };
+
+    const closeImportModal = () => {
+      if (importUploading) return;
+      els.importModal.classList.remove("show");
+      els.importBackdrop.classList.remove("show");
+      setTimeout(() => {
+        els.importModal.hidden = true;
+        els.importBackdrop.hidden = true;
+        activeImportConfig = null;
+        resetImportForm();
+      }, IMPORT_ANIM_MS);
+    };
+
+    const uploadCSVWithProgress = (endpoint, file, onProgress) =>
+      new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", endpoint, true);
+        xhr.withCredentials = true;
+        const csrfToken = getCookie("rck_csrf");
+        if (csrfToken) {
+          xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+        }
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = (event.loaded / event.total) * 100;
+          onProgress(percent);
+        };
+
+        xhr.onerror = () => reject(new Error("upload gagal, cek koneksi lalu coba lagi"));
+        xhr.onload = () => {
+          const data = parseJSON(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(data);
+            return;
+          }
+          reject(new Error(data.error || "import gagal"));
+        };
+
+        const formData = new FormData();
+        formData.append("file", file);
+        xhr.send(formData);
+      });
+
+    const runImport = async () => {
+      if (!activeImportConfig) return;
+      const file = els.importFileInput?.files?.[0];
+      if (!file) {
+        setFlash("Pilih file CSV terlebih dahulu.", "error");
+        return;
+      }
+
+      if (els.importProgress) {
+        els.importProgress.hidden = false;
+      }
+      updateProgress(0);
+      setImportBusy(true);
+
+      try {
+        const data = await uploadCSVWithProgress(activeImportConfig.endpoint, file, (progress) => {
+          updateProgress(progress);
+        });
+        updateProgress(100);
+        setFlash(data.message || "Import selesai.", "success");
+
+        setImportBusy(false);
+        const importKey = activeImportConfig.key;
+        closeImportModal();
+
+        if (importKey === "assets") {
+          await loadAssetTypes();
+          await loadAssets();
+        } else if (importKey === "types") {
+          await loadAssetTypes();
+        } else if (importKey === "loans") {
+          await loadLoans();
+        }
+      } catch (error) {
+        setImportBusy(false);
+        setFlash(error.message || "Import gagal.", "error");
+      }
+    };
+
+    els.importAssets?.addEventListener("click", () => openImportModal("assets"));
+    els.importTypes?.addEventListener("click", () => openImportModal("types"));
+    els.importLoans?.addEventListener("click", () => openImportModal("loans"));
+    els.importCancel?.addEventListener("click", closeImportModal);
+    els.importClose?.addEventListener("click", closeImportModal);
+    els.importBackdrop?.addEventListener("click", closeImportModal);
+    els.importModal.addEventListener("click", (event) => {
+      if (event.target === els.importModal) {
+        closeImportModal();
+      }
+    });
+    els.importFileInput?.addEventListener("change", () => {
+      const file = els.importFileInput.files?.[0];
+      if (els.importFileName) {
+        els.importFileName.textContent = file ? file.name : "Belum ada file dipilih.";
+      }
+    });
+    els.importSubmit?.addEventListener("click", () => {
+      runImport().catch((error) => {
+        setImportBusy(false);
+        setFlash(error.message || "Import gagal.", "error");
+      });
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !els.importModal.hidden) {
+        closeImportModal();
+      }
+    });
+  };
+
   const setupExport = () => {
     if (els.exportAssets) {
       els.exportAssets.addEventListener("click", () => {
@@ -2024,6 +2248,7 @@
       setupLoanFilter();
       setupAuditFilter();
       setupQuickAssetForm();
+      setupImportDialog();
       setupExport();
       setupBarcodeScanner();
       setupPhotoCameraButtons();

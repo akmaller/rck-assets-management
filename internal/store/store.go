@@ -511,6 +511,32 @@ func (s *Store) GetAssetByID(id int64) (Asset, error) {
 	return asset, err
 }
 
+func (s *Store) GetAssetByCode(assetCode string) (Asset, error) {
+	var asset Asset
+	query := s.db.Rebind(`
+		SELECT a.id, a.asset_code, a.name, a.purchase_date, a.asset_condition, a.asset_type_id, a.asset_sequence,
+		       COALESCE(t.name, '') AS asset_type_name,
+		       a.barcode, a.photo_path, a.photo_thumb_path,
+		       CASE
+		         WHEN EXISTS (
+		           SELECT 1 FROM loan_items li
+		           WHERE li.asset_id = a.id AND (li.return_date IS NULL OR li.return_date = '')
+		         ) THEN 'Dipinjam'
+		         ELSE 'Ada'
+		       END AS loan_status,
+		       a.created_at, a.updated_at
+		FROM assets a
+		LEFT JOIN asset_types t ON t.id = a.asset_type_id
+		WHERE a.asset_code = ?
+		LIMIT 1
+	`)
+	err := s.db.Get(&asset, query, strings.TrimSpace(assetCode))
+	if errors.Is(err, sql.ErrNoRows) {
+		return asset, ErrNotFound
+	}
+	return asset, err
+}
+
 func (s *Store) CreateAsset(input CreateAssetInput) (Asset, error) {
 	query := s.db.Rebind(`
 		INSERT INTO assets (asset_code, name, purchase_date, asset_condition, asset_type_id, asset_sequence, barcode)
