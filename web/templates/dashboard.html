@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{.AppName}} | Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link id="favicon-link" rel="icon" href="/static/favicon.svg">
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js" defer></script>
+</head>
+<body class="dashboard-body">
+  <div class="dashboard-layout" id="dashboard-layout">
+    <div class="mobile-topbar">
+      <button class="icon-btn" id="menu-toggle" aria-label="Buka menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <img id="mobile-logo" class="brand-logo compact" src="/static/brand-mark.svg" alt="Logo">
+      <button class="btn btn-primary mobile-add" id="mobile-add-asset" type="button">Tambah Aset</button>
+    </div>
+
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div>
+        <div class="brand-row">
+          <img id="sidebar-logo" class="brand-logo" src="/static/brand-mark.svg" alt="Logo">
+          <div>
+            <p class="kicker" id="sidebar-brand-name">RCK-Assets</p>
+            <h1>Asset Control</h1>
+          </div>
+        </div>
+        <p class="muted">Inventaris terpusat dan aman.</p>
+      </div>
+
+      <nav class="menu" id="menu-nav">
+        <button class="menu-link active" data-section="overview">Ringkasan</button>
+        <button class="menu-link" data-section="assets">Manajemen Aset</button>
+        <button class="menu-link" data-section="loans">Peminjaman</button>
+        <button class="menu-link" data-section="types">Jenis Aset</button>
+        <button class="menu-link" data-section="users">Setting Users</button>
+        <button class="menu-link" data-section="company">Setting Identitas</button>
+        <button class="menu-link" data-section="audit">Audit Log</button>
+      </nav>
+
+      <div class="signature">
+        <div class="sidebar-user">
+          <div>
+            <small class="company-label" id="footer-company-name">{{.AppName}}</small>
+            <small id="sidebar-user">Akun: {{.Username}}</small>
+          </div>
+          <button id="logout-btn" class="btn btn-outline">Logout</button>
+        </div>
+        <small>Asset Control Suite</small>
+      </div>
+    </aside>
+
+    <main class="content">
+
+      <div id="flash" class="flash" aria-live="polite"></div>
+
+      <section id="section-overview" class="panel active" data-section="overview">
+        <h3>Ringkasan Sistem</h3>
+        <div class="stat-grid">
+          <article class="stat-card">
+            <p>Total Aset</p>
+            <strong id="stat-assets">0</strong>
+          </article>
+          <article class="stat-card">
+            <p>Total Users</p>
+            <strong id="stat-users">0</strong>
+          </article>
+          <article class="stat-card">
+            <p>Perusahaan</p>
+            <strong id="stat-company">-</strong>
+          </article>
+        </div>
+
+        <div class="overview-actions">
+          <h4>Tambah Aset Cepat</h4>
+          <form id="quick-asset-form" class="form-grid compact-grid" novalidate>
+            <label>
+              ID Aset
+              <input type="text" name="asset_code" required>
+            </label>
+            <label>
+              Nama Aset
+              <input type="text" name="name" required>
+            </label>
+            <label>
+              Tanggal Pembelian
+              <input type="date" name="purchase_date" required>
+            </label>
+            <label>
+              Kondisi
+              <select name="condition" required>
+                <option value="Baik" selected>Baik</option>
+                <option value="Perlu Servis">Perlu Servis</option>
+                <option value="Rusak">Rusak</option>
+              </select>
+            </label>
+            <label>
+              Jenis Aset
+              <select name="asset_type_id" required>
+                <option value="">Pilih jenis aset</option>
+              </select>
+            </label>
+            <label>
+              Barcode
+              <div class="input-row">
+                <input type="text" name="barcode">
+                <button type="button" class="btn btn-outline scan-btn" data-scan-target="quick">Scan</button>
+              </div>
+            </label>
+            <label>
+              Foto Aset
+              <input class="file-input-hidden" type="file" name="photo" accept="image/*" capture="environment">
+              <button type="button" class="btn btn-outline photo-btn" data-photo-target="quick">Ambil Foto</button>
+            </label>
+            <div class="inline-actions full-width">
+              <button type="submit" class="btn btn-primary">Tambah Aset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="section-company" class="panel" data-section="company">
+        <h3>Setting Identitas Perusahaan</h3>
+        <form id="company-form" class="form-grid" novalidate>
+          <label>
+            Nama Perusahaan
+            <input type="text" name="company_name" required>
+          </label>
+          <label>
+            Email
+            <input type="email" name="email">
+          </label>
+          <label>
+            Telepon
+            <input type="text" name="phone">
+          </label>
+          <label>
+            Website
+            <input type="text" name="website">
+          </label>
+          <label>
+            Prefix ID Aset
+            <input type="text" name="asset_code_prefix" placeholder="RCK" maxlength="6">
+          </label>
+          <label>
+            Logo Utama
+            <input type="file" name="logo" accept="image/*" capture="environment">
+          </label>
+          <label>
+            Favicon
+            <input type="file" name="favicon" accept="image/*" capture="environment">
+          </label>
+          <label class="full-width">
+            Alamat
+            <textarea name="address" rows="3"></textarea>
+          </label>
+          <button type="submit" class="btn btn-primary">Simpan Identitas</button>
+        </form>
+      </section>
+
+      <section id="section-users" class="panel" data-section="users">
+        <h3>Setting Users</h3>
+        <p class="muted">Menu ini hanya dapat dikelola oleh role admin.</p>
+
+        <form id="user-form" class="form-grid" novalidate>
+          <input type="hidden" name="id">
+          <label>
+            Username
+            <input type="text" name="username" required>
+          </label>
+          <label>
+            Nama Lengkap
+            <input type="text" name="full_name" required>
+          </label>
+          <label>
+            Password
+            <input type="password" name="password" placeholder="Isi saat membuat / ubah password">
+          </label>
+          <label>
+            Role
+            <select name="role" required>
+              <option value="staff">Staff</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <label class="check-wrap">
+            <input type="checkbox" name="is_active" checked>
+            User aktif
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary" id="user-submit">Simpan User</button>
+            <button type="button" class="btn btn-outline" id="user-cancel">Batal Edit</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Nama</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="section-audit" class="panel" data-section="audit">
+        <h3>Audit Log</h3>
+        <p class="muted">Riwayat aktivitas semua pengguna (admin dan staff).</p>
+
+        <form id="audit-filter" class="form-grid compact-grid" novalidate>
+          <label>
+            User
+            <input type="text" name="user" placeholder="Cari username">
+          </label>
+          <label>
+            Aksi
+            <input type="text" name="action" list="audit-actions" placeholder="login, create, update">
+            <datalist id="audit-actions">
+              <option value="login">
+              <option value="login_failed">
+              <option value="logout">
+              <option value="create">
+              <option value="update">
+              <option value="delete">
+              <option value="upload">
+              <option value="loan_return">
+            </datalist>
+          </label>
+          <label>
+            Dari Tanggal
+            <input type="date" name="date_from">
+          </label>
+          <label>
+            Sampai Tanggal
+            <input type="date" name="date_to">
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary">Terapkan</button>
+            <button type="button" class="btn btn-outline" id="audit-reset">Reset</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>User</th>
+                <th>Role</th>
+                <th>Aksi</th>
+                <th>Entitas</th>
+                <th>Detail</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table"></tbody>
+          </table>
+        </div>
+        <div class="table-pager">
+          <button type="button" class="btn btn-outline" id="audit-prev">Prev</button>
+          <span class="muted small" id="audit-page">Halaman 1</span>
+          <button type="button" class="btn btn-outline" id="audit-next">Next</button>
+        </div>
+      </section>
+
+      <section id="section-types" class="panel" data-section="types">
+        <h3>Manajemen Jenis Aset</h3>
+        <p class="muted">Tambahkan kategori/jenis aset agar konsisten pada input.</p>
+
+        <form id="type-form" class="form-grid" novalidate>
+          <label>
+            Nama Jenis
+            <input type="text" name="name" required>
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary">Tambah Jenis</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nama Jenis</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="types-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="section-assets" class="panel" data-section="assets">
+        <h3>Manajemen Aset</h3>
+        <div class="section-actions">
+          <button type="button" class="btn btn-outline" id="export-assets">Export CSV</button>
+          <button type="button" class="btn btn-outline" id="asset-filter-toggle">Filter</button>
+          <button type="button" class="btn btn-primary" id="asset-form-toggle">Tambah Aset</button>
+        </div>
+
+        <form id="asset-form" class="form-grid form-panel" novalidate>
+          <input type="hidden" name="id">
+          <label>
+            ID Aset
+            <input type="text" name="asset_code" required>
+          </label>
+          <label>
+            Nama Aset
+            <input type="text" name="name" required>
+          </label>
+          <label>
+            Tanggal Pembelian
+            <input type="date" name="purchase_date" required>
+          </label>
+          <label>
+            Kondisi
+            <select name="condition" required>
+              <option value="Baik" selected>Baik</option>
+              <option value="Perlu Servis">Perlu Servis</option>
+              <option value="Rusak">Rusak</option>
+            </select>
+          </label>
+          <label>
+            Jenis Aset
+            <select name="asset_type_id" required>
+              <option value="">Pilih jenis aset</option>
+            </select>
+          </label>
+          <label>
+            Barcode
+            <div class="input-row">
+              <input type="text" name="barcode">
+              <button type="button" class="btn btn-outline scan-btn" data-scan-target="asset">Scan</button>
+            </div>
+          </label>
+          <label>
+            Foto Aset
+            <input class="file-input-hidden" type="file" name="photo" accept="image/*" capture="environment">
+            <button type="button" class="btn btn-outline photo-btn" data-photo-target="asset">Ambil Foto</button>
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary" id="asset-submit">Simpan Aset</button>
+            <button type="button" class="btn btn-outline" id="asset-cancel">Batal Edit</button>
+          </div>
+        </form>
+
+        <form id="asset-filter" class="form-grid compact-grid filter-panel" novalidate>
+          <label>
+            Dari Tanggal
+            <input type="date" name="date_from">
+          </label>
+          <label>
+            Sampai Tanggal
+            <input type="date" name="date_to">
+          </label>
+          <label>
+            Jenis Aset
+            <select name="type_id" id="asset-filter-type">
+              <option value="">Semua jenis</option>
+            </select>
+          </label>
+          <label>
+            Kondisi
+            <select name="condition">
+              <option value="">Semua kondisi</option>
+              <option value="Baik">Baik</option>
+              <option value="Perlu Servis">Perlu Servis</option>
+              <option value="Rusak">Rusak</option>
+            </select>
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary">Terapkan</button>
+            <button type="button" class="btn btn-outline" id="asset-filter-reset">Reset</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Foto</th>
+                <th>ID Aset</th>
+                <th>Nama</th>
+                <th>Jenis</th>
+                <th>Tgl Beli</th>
+                <th>Kondisi</th>
+                <th>Barcode</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="assets-table"></tbody>
+          </table>
+        </div>
+        <div class="table-pager">
+          <button type="button" class="btn btn-outline" id="asset-prev">Prev</button>
+          <span class="muted small" id="asset-page">Halaman 1</span>
+          <button type="button" class="btn btn-outline" id="asset-next">Next</button>
+        </div>
+      </section>
+
+      <section id="section-loans" class="panel" data-section="loans">
+        <h3>Peminjaman Aset</h3>
+        <p class="muted">Catat aset yang dipinjam oleh pihak lain.</p>
+        <div class="section-actions">
+          <button type="button" class="btn btn-outline" id="loan-filter-toggle">Filter</button>
+        </div>
+
+        <form id="loan-form" class="form-grid" novalidate>
+          <input type="hidden" name="id">
+          <label>
+            Nama Peminjam
+            <input type="text" name="borrower_name" required>
+          </label>
+          <label>
+            Kontak Peminjam
+            <input type="text" name="borrower_contact" placeholder="Telepon / Email">
+          </label>
+          <label>
+            Tanggal Pinjam
+            <input type="date" name="borrow_date" required>
+          </label>
+          <label class="full-width">
+            Catatan
+            <textarea name="notes" rows="3" placeholder="Keterangan tambahan"></textarea>
+          </label>
+
+          <div class="full-width loan-divider">
+            <strong>Daftar Aset Dipinjam</strong>
+            <span class="muted small">Tambah lebih dari satu aset</span>
+          </div>
+
+          <label class="full-width">
+            Cari Aset
+            <div class="loan-asset-row">
+              <div class="search-select">
+                <input type="text" name="asset_search" id="loan-asset-search" placeholder="Ketik kode atau nama aset" autocomplete="off">
+                <div class="search-results" id="loan-asset-results" role="listbox" aria-label="Daftar aset"></div>
+              </div>
+              <button type="button" class="btn btn-outline" id="loan-add-asset">Tambah</button>
+            </div>
+          </label>
+
+          <div class="full-width selected-assets" id="loan-selected-assets"></div>
+
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary" id="loan-submit">Simpan Peminjaman</button>
+            <button type="button" class="btn btn-outline" id="loan-cancel">Batal Edit</button>
+          </div>
+        </form>
+
+        <form id="loan-filter" class="form-grid compact-grid filter-panel" novalidate>
+          <label>
+            Dari Tanggal
+            <input type="date" name="date_from">
+          </label>
+          <label>
+            Sampai Tanggal
+            <input type="date" name="date_to">
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary">Terapkan</button>
+            <button type="button" class="btn btn-outline" id="loan-filter-reset">Reset</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Peminjam</th>
+                <th>Kontak</th>
+                <th>Tgl Pinjam</th>
+                <th>Aset</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="loans-table"></tbody>
+          </table>
+        </div>
+        <div class="table-pager">
+          <button type="button" class="btn btn-outline" id="loan-prev">Prev</button>
+          <span class="muted small" id="loan-page">Halaman 1</span>
+          <button type="button" class="btn btn-outline" id="loan-next">Next</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="scan-modal" id="scan-modal" aria-hidden="true">
+    <div class="scan-card">
+      <div class="scan-header">
+        <strong>Scan Barcode</strong>
+        <button type="button" class="icon-btn scan-close" id="scan-close" aria-label="Tutup">
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <video id="scan-video" autoplay muted playsinline></video>
+      <p class="muted small" id="scan-status">Arahkan kamera ke barcode.</p>
+    </div>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

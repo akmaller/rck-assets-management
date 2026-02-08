@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{.AppName}} | Login</title>
+  <link id="favicon-link" rel="icon" href="/static/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="login-body">
+  <div class="background-shape shape-top"></div>
+  <div class="background-shape shape-bottom"></div>
+
+  <main class="login-shell">
+    <section class="login-card">
+      <div class="brand-row">
+        <img id="brand-logo" class="brand-logo" src="/static/brand-mark.svg" alt="Logo">
+        <div>
+          <p class="kicker" id="brand-name">RCK-Assets</p>
+          <h1>Manajemen Aset Modern</h1>
+        </div>
+      </div>
+      <p class="muted">Masuk untuk registrasi aset, inventaris, dan kontrol pengguna kantor/perusahaan.</p>
+
+      <form id="login-form" class="form-stack" novalidate>
+        <label>
+          Username
+          <input type="text" name="username" autocomplete="username" required>
+        </label>
+        <label>
+          Password
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="btn btn-primary">Masuk ke Dashboard</button>
+      </form>
+
+      <p id="login-message" class="inline-message" aria-live="polite"></p>
+      <p class="muted small">Default admin: <code>admin</code> / <code>admin123</code></p>
+    </section>
+  </main>
+
+  <script src="/static/login.js" defer></script>
+</body>
+</html>

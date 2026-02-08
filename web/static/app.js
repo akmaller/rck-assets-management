@@ -1,0 +1,1630 @@
+(() => {
+  const state = {
+    me: null,
+    company: null,
+    users: [],
+    assets: [],
+    assetTypes: [],
+    loans: [],
+    auditLogs: [],
+    assetTotal: 0,
+    assetFilter: {
+      date_from: "",
+      date_to: "",
+      type_id: "",
+      condition: "",
+    },
+    assetPage: 1,
+    assetHasMore: false,
+    loanFilter: {
+      date_from: "",
+      date_to: "",
+    },
+    loanPage: 1,
+    loanHasMore: false,
+    auditFilter: {
+      user: "",
+      action: "",
+      date_from: "",
+      date_to: "",
+    },
+    auditPage: 1,
+    auditHasMore: false,
+    loanAssetResults: [],
+  };
+
+  let selectedLoanAssets = [];
+  let selectedLoanCandidate = null;
+
+  const els = {
+    flash: document.getElementById("flash"),
+    menuNav: document.getElementById("menu-nav"),
+    panels: Array.from(document.querySelectorAll(".panel")),
+    roleBadge: document.getElementById("role-badge"),
+    welcomeUser: document.getElementById("welcome-user"),
+    sidebarUser: document.getElementById("sidebar-user"),
+    logoutBtn: document.getElementById("logout-btn"),
+    statAssets: document.getElementById("stat-assets"),
+    statUsers: document.getElementById("stat-users"),
+    statCompany: document.getElementById("stat-company"),
+    headerCompany: document.getElementById("header-company-name"),
+    sidebarBrandName: document.getElementById("sidebar-brand-name"),
+    mobileBrandName: document.getElementById("mobile-brand-name"),
+    mobileLogo: document.getElementById("mobile-logo"),
+    mobileAddAsset: document.getElementById("mobile-add-asset"),
+    sidebarLogo: document.getElementById("sidebar-logo"),
+    footerCompanyName: document.getElementById("footer-company-name"),
+    faviconLink: document.getElementById("favicon-link"),
+    companyForm: document.getElementById("company-form"),
+    quickAssetForm: document.getElementById("quick-asset-form"),
+    typeForm: document.getElementById("type-form"),
+    typesTable: document.getElementById("types-table"),
+    userForm: document.getElementById("user-form"),
+    userCancel: document.getElementById("user-cancel"),
+    usersTable: document.getElementById("users-table"),
+    auditTable: document.getElementById("audit-table"),
+    auditFilter: document.getElementById("audit-filter"),
+    auditReset: document.getElementById("audit-reset"),
+    auditPrev: document.getElementById("audit-prev"),
+    auditNext: document.getElementById("audit-next"),
+    auditPageLabel: document.getElementById("audit-page"),
+    assetForm: document.getElementById("asset-form"),
+    assetCancel: document.getElementById("asset-cancel"),
+    assetsTable: document.getElementById("assets-table"),
+    assetFilter: document.getElementById("asset-filter"),
+    assetFilterType: document.getElementById("asset-filter-type"),
+    assetFilterReset: document.getElementById("asset-filter-reset"),
+    assetFilterToggle: document.getElementById("asset-filter-toggle"),
+    assetFormToggle: document.getElementById("asset-form-toggle"),
+    assetPrev: document.getElementById("asset-prev"),
+    assetNext: document.getElementById("asset-next"),
+    assetPageLabel: document.getElementById("asset-page"),
+    loanForm: document.getElementById("loan-form"),
+    loanCancel: document.getElementById("loan-cancel"),
+    loansTable: document.getElementById("loans-table"),
+    loanFilter: document.getElementById("loan-filter"),
+    loanFilterReset: document.getElementById("loan-filter-reset"),
+    loanFilterToggle: document.getElementById("loan-filter-toggle"),
+    loanPrev: document.getElementById("loan-prev"),
+    loanNext: document.getElementById("loan-next"),
+    loanPageLabel: document.getElementById("loan-page"),
+    loanAssetSearch: document.getElementById("loan-asset-search"),
+    loanAssetResults: document.getElementById("loan-asset-results"),
+    loanAddAsset: document.getElementById("loan-add-asset"),
+    loanSelectedAssets: document.getElementById("loan-selected-assets"),
+    exportAssets: document.getElementById("export-assets"),
+    scanModal: document.getElementById("scan-modal"),
+    scanVideo: document.getElementById("scan-video"),
+    scanClose: document.getElementById("scan-close"),
+    scanStatus: document.getElementById("scan-status"),
+    menuToggle: document.getElementById("menu-toggle"),
+    drawerBackdrop: document.getElementById("drawer-backdrop"),
+    layout: document.getElementById("dashboard-layout"),
+  };
+
+  const setFlash = (text, mode = "") => {
+    if (!els.flash) return;
+    els.flash.textContent = text;
+    els.flash.className = `flash ${mode}`.trim();
+    if (text) {
+      setTimeout(() => {
+        if (els.flash.textContent === text) {
+          els.flash.textContent = "";
+          els.flash.className = "flash";
+        }
+      }, 2800);
+    }
+  };
+
+  const getCookie = (name) => {
+    const value = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith(`${name}=`));
+    return value ? decodeURIComponent(value.split("=")[1]) : "";
+  };
+
+  const api = async (path, options = {}) => {
+    const csrfToken = getCookie("rck_csrf");
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || "Request gagal");
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+
+  const activateSection = (name) => {
+    const links = Array.from(document.querySelectorAll(".menu-link"));
+    links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
+    els.panels.forEach((panel) => panel.classList.toggle("active", panel.id === `section-${name}`));
+    closeDrawer();
+  };
+
+  const openDrawer = () => {
+    if (els.layout) {
+      els.layout.classList.add("drawer-open");
+    }
+  };
+
+  const closeDrawer = () => {
+    if (els.layout) {
+      els.layout.classList.remove("drawer-open");
+    }
+  };
+
+  const setupDrawer = () => {
+    if (els.menuToggle) {
+      els.menuToggle.addEventListener("click", () => {
+        if (!els.layout) return;
+        els.layout.classList.toggle("drawer-open");
+      });
+    }
+    if (els.drawerBackdrop) {
+      els.drawerBackdrop.addEventListener("click", closeDrawer);
+    }
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDrawer();
+    });
+  };
+
+  const setupMenu = () => {
+    els.menuNav?.addEventListener("click", (event) => {
+      const button = event.target.closest(".menu-link");
+      if (!button) return;
+      activateSection(button.dataset.section);
+    });
+  };
+
+  const setupMobileAdd = () => {
+    if (!els.mobileAddAsset) return;
+    els.mobileAddAsset.addEventListener("click", () => {
+      activateSection("overview");
+      const form = els.quickAssetForm;
+      if (!form) return;
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const setupScrollSpy = () => {
+    const sections = Array.from(document.querySelectorAll(".panel[data-section]"));
+    if (sections.length === 0) return;
+
+    const setActiveBySection = (name) => {
+      const links = Array.from(document.querySelectorAll(".menu-link"));
+      links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible.length === 0) return;
+        const sectionName = visible[0].target.getAttribute("data-section");
+        if (sectionName) setActiveBySection(sectionName);
+      },
+      {
+        root: null,
+        rootMargin: "-20% 0px -60% 0px",
+        threshold: [0.1, 0.25, 0.6],
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+  };
+
+  const updateStats = () => {
+    els.statAssets.textContent = String(state.assetTotal || 0);
+    els.statUsers.textContent = state.me?.role === "admin" ? String(state.users.length || 0) : "-";
+    els.statCompany.textContent = state.company?.company_name || "Belum diisi";
+  };
+
+  const setupLogout = () => {
+    els.logoutBtn?.addEventListener("click", async () => {
+      try {
+        await api("/api/auth/logout", { method: "POST" });
+      } catch (_) {
+      } finally {
+        window.location.href = "/";
+      }
+    });
+  };
+
+  const loadMe = async () => {
+    try {
+      const data = await api("/api/auth/me");
+      state.me = data.user;
+      if (els.welcomeUser) {
+        els.welcomeUser.textContent = state.me.username;
+      }
+      if (els.sidebarUser) {
+        els.sidebarUser.textContent = `Akun: ${state.me.username}`;
+      }
+      if (els.roleBadge) {
+        els.roleBadge.textContent = state.me.role;
+      }
+    } catch (error) {
+      window.location.href = "/";
+      return;
+    }
+
+    const usersSection = document.getElementById("section-users");
+    const userMenuBtn = document.querySelector(".menu-link[data-section='users']");
+    const companySection = document.getElementById("section-company");
+    const companyMenuBtn = document.querySelector(".menu-link[data-section='company']");
+    const auditSection = document.getElementById("section-audit");
+    const auditMenuBtn = document.querySelector(".menu-link[data-section='audit']");
+    if (state.me.role !== "admin") {
+      if (usersSection) usersSection.style.display = "none";
+      if (userMenuBtn) userMenuBtn.style.display = "none";
+      if (companySection) companySection.style.display = "none";
+      if (companyMenuBtn) companyMenuBtn.style.display = "none";
+      if (auditSection) auditSection.style.display = "none";
+      if (auditMenuBtn) auditMenuBtn.style.display = "none";
+    }
+  };
+
+  const loadCompany = async () => {
+    const data = await api("/api/settings/company");
+    state.company = data.setting;
+
+    const form = els.companyForm;
+    form.company_name.value = state.company.company_name || "";
+    form.address.value = state.company.address || "";
+    form.email.value = state.company.email || "";
+    form.phone.value = state.company.phone || "";
+    form.website.value = state.company.website || "";
+    if (form.asset_code_prefix) {
+      form.asset_code_prefix.value = state.company.asset_code_prefix || "RCK";
+    }
+    updateStats();
+    applyBranding();
+    applyDefaultPurchaseDates();
+    if (form.purchase_date) {
+      requestNextAssetCode(form.purchase_date.value, form.asset_code);
+    }
+  };
+
+  const applyBranding = () => {
+    const name = state.company?.company_name || "RCK-Assets";
+    if (els.headerCompany) {
+      els.headerCompany.textContent = name || "Dashboard";
+    }
+    if (els.sidebarBrandName) {
+      els.sidebarBrandName.textContent = name;
+    }
+    if (els.mobileBrandName) {
+      els.mobileBrandName.textContent = name;
+    }
+    if (els.footerCompanyName) {
+      els.footerCompanyName.textContent = name;
+    }
+    if (state.company?.logo_url && els.sidebarLogo) {
+      els.sidebarLogo.src = state.company.logo_url;
+    }
+    if (state.company?.logo_url && els.mobileLogo) {
+      els.mobileLogo.src = state.company.logo_url;
+    }
+    if (state.company?.favicon_url && els.faviconLink) {
+      els.faviconLink.href = state.company.favicon_url;
+    }
+  };
+
+  const uploadCompanyMedia = async (type, file) => {
+    if (!file) return;
+    const csrfToken = getCookie("rck_csrf");
+    const formData = new FormData();
+    formData.append("photo", file);
+    const response = await fetch(`/api/settings/company/${type}`, {
+      method: "POST",
+      body: formData,
+      credentials: "same-origin",
+      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || "Upload gagal");
+      error.status = response.status;
+      throw error;
+    }
+    state.company = data.setting || state.company;
+    applyBranding();
+  };
+
+  const setupCompanyForm = () => {
+    els.companyForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = {
+        company_name: els.companyForm.company_name.value.trim(),
+        address: els.companyForm.address.value.trim(),
+        email: els.companyForm.email.value.trim(),
+        phone: els.companyForm.phone.value.trim(),
+        website: els.companyForm.website.value.trim(),
+        asset_code_prefix: els.companyForm.asset_code_prefix?.value?.trim(),
+      };
+
+      try {
+        const data = await api("/api/settings/company", {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        state.company = data.setting;
+        updateStats();
+        await uploadCompanyMedia("logo", els.companyForm.logo?.files?.[0]);
+        await uploadCompanyMedia("favicon", els.companyForm.favicon?.files?.[0]);
+        if (els.companyForm.logo) els.companyForm.logo.value = "";
+        if (els.companyForm.favicon) els.companyForm.favicon.value = "";
+        setFlash(data.message || "Identitas perusahaan diperbarui.", "success");
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+  };
+
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+
+  const applyDefaultPurchaseDates = () => {
+    const forms = [els.quickAssetForm, els.assetForm].filter(Boolean);
+    forms.forEach((form) => {
+      if (!form.purchase_date) return;
+      if (!form.purchase_date.value) {
+        form.purchase_date.value = todayISO();
+      }
+    });
+  };
+
+  const applyDefaultLoanDates = () => {
+    if (!els.loanForm?.borrow_date) return;
+    if (!els.loanForm.borrow_date.value) {
+      els.loanForm.borrow_date.value = todayISO();
+    }
+  };
+
+  const requestNextAssetCode = async (purchaseDate, input) => {
+    if (!purchaseDate || !input) return;
+    if (input.value && input.dataset.auto !== "1") return;
+    try {
+      const data = await api(`/api/assets/next-id?purchase_date=${encodeURIComponent(purchaseDate)}`);
+      if (data.asset_code) {
+        input.value = data.asset_code;
+        input.dataset.auto = "1";
+      }
+    } catch (_) {
+    }
+  };
+
+  const setupAutoAssetCodeInputs = () => {
+    const configs = [
+      { form: els.assetForm, date: "purchase_date", code: "asset_code" },
+      { form: els.quickAssetForm, date: "purchase_date", code: "asset_code" },
+    ];
+    configs.forEach((cfg) => {
+      const form = cfg.form;
+      if (!form) return;
+      const dateInput = form[cfg.date];
+      const codeInput = form[cfg.code];
+      if (!dateInput || !codeInput) return;
+
+      const trigger = () => requestNextAssetCode(dateInput.value, codeInput);
+      dateInput.addEventListener("change", trigger);
+      dateInput.addEventListener("blur", trigger);
+      codeInput.addEventListener("focus", trigger);
+      codeInput.addEventListener("input", () => {
+        if (codeInput.value) codeInput.dataset.auto = "0";
+      });
+      codeInput.addEventListener("blur", () => {
+        if (!codeInput.value) {
+          codeInput.dataset.auto = "1";
+          trigger();
+        }
+      });
+    });
+  };
+
+  const renderUsers = () => {
+    if (!els.usersTable) return;
+
+    if (state.users.length === 0) {
+      els.usersTable.innerHTML = '<tr><td colspan="5">Belum ada user.</td></tr>';
+      return;
+    }
+
+    els.usersTable.innerHTML = state.users
+      .map(
+        (user) => `
+          <tr>
+            <td>${escapeHtml(user.username)}</td>
+            <td>${escapeHtml(user.full_name)}</td>
+            <td>${escapeHtml(user.role)}</td>
+            <td>${user.is_active ? "Aktif" : "Nonaktif"}</td>
+            <td>
+              <div class="row-actions">
+                <button class="tiny-btn" data-action="edit-user" data-id="${user.id}">Edit</button>
+                <button class="tiny-btn warn" data-action="delete-user" data-id="${user.id}">Hapus</button>
+              </div>
+            </td>
+          </tr>
+        `,
+      )
+      .join("");
+  };
+
+  const formatDateTime = (raw) => {
+    if (!raw) return "-";
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+      return raw;
+    }
+    return parsed.toLocaleString("id-ID");
+  };
+
+  const renderAuditLogs = () => {
+    if (!els.auditTable) return;
+    if (state.auditLogs.length === 0) {
+      els.auditTable.innerHTML = '<tr><td colspan="7">Belum ada aktivitas.</td></tr>';
+      return;
+    }
+    els.auditTable.innerHTML = state.auditLogs
+      .map(
+        (log) => `
+          <tr>
+            <td>${escapeHtml(formatDateTime(log.created_at))}</td>
+            <td>${escapeHtml(log.username || "-")}</td>
+            <td>${escapeHtml(log.role || "-")}</td>
+            <td>${escapeHtml(log.action)}</td>
+            <td>${escapeHtml(log.entity)}${log.entity_id ? `<br><small class="muted">ID ${log.entity_id}</small>` : ""}</td>
+            <td><span class="audit-detail">${escapeHtml(log.detail || "-")}</span></td>
+            <td><span class="audit-detail">${escapeHtml(log.ip || "-")}</span></td>
+          </tr>
+        `,
+      )
+      .join("");
+  };
+
+  const updateAuditPager = () => {
+    if (!els.auditPageLabel) return;
+    els.auditPageLabel.textContent = `Halaman ${state.auditPage}`;
+    if (els.auditPrev) {
+      els.auditPrev.disabled = state.auditPage <= 1;
+    }
+    if (els.auditNext) {
+      els.auditNext.disabled = !state.auditHasMore;
+    }
+  };
+
+  const renderTypes = () => {
+    if (!els.typesTable) return;
+    if (state.assetTypes.length === 0) {
+      els.typesTable.innerHTML = '<tr><td colspan="2">Belum ada jenis aset.</td></tr>';
+      return;
+    }
+    els.typesTable.innerHTML = state.assetTypes
+      .map(
+        (type) => `
+          <tr>
+            <td>${escapeHtml(type.name)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="tiny-btn warn" data-action="delete-type" data-id="${type.id}">Hapus</button>
+              </div>
+            </td>
+          </tr>
+        `,
+      )
+      .join("");
+  };
+
+  const populateTypeSelects = () => {
+    const selects = [
+      els.assetForm?.asset_type_id,
+      els.quickAssetForm?.asset_type_id,
+      els.assetFilterType,
+    ].filter(Boolean);
+    selects.forEach((select) => {
+      const current = select.value;
+      if (select === els.assetFilterType) {
+        select.innerHTML = '<option value="">Semua jenis</option>';
+      } else {
+        select.innerHTML = '<option value="">Pilih jenis aset</option>';
+      }
+      state.assetTypes.forEach((type) => {
+        const option = document.createElement("option");
+        option.value = String(type.id);
+        option.textContent = type.name;
+        select.appendChild(option);
+      });
+      if (current) {
+        select.value = current;
+      }
+    });
+  };
+
+  const renderLoanAssetResults = (items = null) => {
+    if (!els.loanAssetResults || !els.loanAssetSearch) return;
+    const results = items || state.loanAssetResults || [];
+    if (results.length === 0) {
+      els.loanAssetResults.innerHTML = '<div class="muted small">Tidak ada hasil.</div>';
+      els.loanAssetResults.classList.add("active");
+      return;
+    }
+    els.loanAssetResults.innerHTML = results
+      .map(
+        (asset) => `
+          <button type="button" class="search-option" data-asset-id="${asset.id}">
+            ${escapeHtml(asset.asset_code)} - ${escapeHtml(asset.name)}
+            <small>${escapeHtml(asset.asset_type_name || "Jenis tidak diketahui")}</small>
+          </button>
+        `,
+      )
+      .join("");
+    els.loanAssetResults.classList.add("active");
+  };
+
+  const renderSelectedLoanAssets = () => {
+    if (!els.loanSelectedAssets) return;
+    if (selectedLoanAssets.length === 0) {
+      els.loanSelectedAssets.innerHTML = '<span class="muted small">Belum ada aset dipilih.</span>';
+      return;
+    }
+    els.loanSelectedAssets.innerHTML = selectedLoanAssets
+      .map(
+        (asset) => `
+          <span class="asset-chip">
+            ${escapeHtml(asset.asset_code)} - ${escapeHtml(asset.name)}
+            <button type="button" data-asset-id="${asset.id}" aria-label="Hapus aset">x</button>
+          </span>
+        `,
+      )
+      .join("");
+  };
+
+  const addLoanAsset = (asset) => {
+    if (!asset) return;
+    if (selectedLoanAssets.some((item) => item.id === asset.id)) return;
+    selectedLoanAssets = [...selectedLoanAssets, asset];
+    renderSelectedLoanAssets();
+  };
+
+  const loadAssetTypes = async () => {
+    const data = await api("/api/asset-types");
+    state.assetTypes = data.types || [];
+    renderTypes();
+    populateTypeSelects();
+  };
+
+  const loadUsers = async () => {
+    if (state.me?.role !== "admin") return;
+    const data = await api("/api/users");
+    state.users = data.users || [];
+    renderUsers();
+    updateStats();
+  };
+
+  const loadAuditLogs = async (override = null) => {
+    if (state.me?.role !== "admin") return;
+    if (override) {
+      state.auditFilter = { ...state.auditFilter, ...override };
+    }
+    const params = new URLSearchParams();
+    params.set("limit", "100");
+    params.set("page", String(state.auditPage));
+    if (state.auditFilter?.user) params.set("user", state.auditFilter.user);
+    if (state.auditFilter?.action) params.set("action", state.auditFilter.action);
+    if (state.auditFilter?.date_from) params.set("date_from", state.auditFilter.date_from);
+    if (state.auditFilter?.date_to) params.set("date_to", state.auditFilter.date_to);
+    const data = await api(`/api/audit-logs?${params.toString()}`);
+    state.auditLogs = data.logs || [];
+    state.auditHasMore = Boolean(data.has_more);
+    state.auditPage = Number(data.page || state.auditPage);
+    renderAuditLogs();
+    updateAuditPager();
+  };
+
+  const resetUserForm = () => {
+    if (!els.userForm) return;
+    els.userForm.reset();
+    els.userForm.id.value = "";
+    els.userForm.role.value = "staff";
+    els.userForm.is_active.checked = true;
+    document.getElementById("user-submit").textContent = "Simpan User";
+  };
+
+  const setupUsers = () => {
+    if (!els.userForm || !els.usersTable) return;
+
+    els.userForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const id = els.userForm.id.value;
+      const payload = {
+        username: els.userForm.username.value.trim(),
+        full_name: els.userForm.full_name.value.trim(),
+        password: els.userForm.password.value,
+        role: els.userForm.role.value,
+        is_active: Boolean(els.userForm.is_active.checked),
+      };
+
+      if (!payload.username || !payload.full_name || !payload.role) {
+        setFlash("Data user belum lengkap.", "error");
+        return;
+      }
+      if (!id && payload.password.length < 6) {
+        setFlash("Password minimal 6 karakter untuk user baru.", "error");
+        return;
+      }
+
+      try {
+        const endpoint = id ? `/api/users/${id}` : "/api/users";
+        const method = id ? "PUT" : "POST";
+        const data = await api(endpoint, { method, body: JSON.stringify(payload) });
+        setFlash(data.message || "User berhasil disimpan.", "success");
+        resetUserForm();
+        await loadUsers();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+
+    els.userCancel.addEventListener("click", resetUserForm);
+
+    els.usersTable.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+
+      const id = Number(button.dataset.id);
+      const user = state.users.find((item) => item.id === id);
+      if (!user) return;
+
+      if (button.dataset.action === "edit-user") {
+        els.userForm.id.value = String(user.id);
+        els.userForm.username.value = user.username;
+        els.userForm.full_name.value = user.full_name;
+        els.userForm.password.value = "";
+        els.userForm.role.value = user.role;
+        els.userForm.is_active.checked = Boolean(user.is_active);
+        document.getElementById("user-submit").textContent = "Update User";
+        activateSection("users");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (button.dataset.action === "delete-user") {
+        if (!window.confirm(`Hapus user ${user.username}?`)) return;
+        try {
+          const data = await api(`/api/users/${id}`, { method: "DELETE" });
+          setFlash(data.message || "User dihapus.", "success");
+          await loadUsers();
+        } catch (error) {
+          setFlash(error.message, "error");
+        }
+      }
+    });
+  };
+
+  const setupTypes = () => {
+    if (!els.typeForm || !els.typesTable) return;
+    els.typeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = {
+        name: els.typeForm.name.value.trim(),
+      };
+      if (!payload.name) {
+        setFlash("Nama jenis wajib diisi.", "error");
+        return;
+      }
+      try {
+        const data = await api("/api/asset-types", { method: "POST", body: JSON.stringify(payload) });
+        setFlash(data.message || "Jenis aset ditambahkan.", "success");
+        els.typeForm.reset();
+        await loadAssetTypes();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+
+    els.typesTable.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const id = Number(button.dataset.id);
+      const type = state.assetTypes.find((item) => item.id === id);
+      if (!type) return;
+      if (!window.confirm(`Hapus jenis ${type.name}?`)) return;
+      try {
+        const data = await api(`/api/asset-types/${id}`, { method: "DELETE" });
+        setFlash(data.message || "Jenis aset dihapus.", "success");
+        await loadAssetTypes();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+  };
+
+  const renderAssets = () => {
+    if (!els.assetsTable) return;
+
+    if (state.assets.length === 0) {
+      els.assetsTable.innerHTML = '<tr><td colspan="9">Belum ada aset.</td></tr>';
+      return;
+    }
+
+    els.assetsTable.innerHTML = state.assets
+      .map(
+        (asset) => `
+          <tr>
+            <td>
+              ${
+                asset.photo_url
+                  ? `<img class="thumb" src="${asset.photo_url}" alt="Foto ${escapeHtml(asset.asset_code)}">`
+                  : `<div class="thumb"></div>`
+              }
+            </td>
+            <td>${escapeHtml(asset.asset_code)}</td>
+            <td>${escapeHtml(asset.name)}</td>
+            <td>${escapeHtml(asset.asset_type_name || "-")}</td>
+            <td>${escapeHtml(asset.purchase_date)}</td>
+            <td>${escapeHtml(asset.condition)}</td>
+            <td>${escapeHtml(asset.barcode || "-")}</td>
+            <td>
+              <span class="status-pill ${asset.loan_status === "Dipinjam" ? "borrowed" : "available"}">
+                ${escapeHtml(asset.loan_status || "Ada")}
+              </span>
+            </td>
+            <td>
+              <div class="row-actions">
+                <button class="tiny-btn" data-action="edit-asset" data-id="${asset.id}">Edit</button>
+                <button class="tiny-btn warn" data-action="delete-asset" data-id="${asset.id}">Hapus</button>
+              </div>
+            </td>
+          </tr>
+        `,
+      )
+      .join("");
+  };
+
+  const updateAssetPager = () => {
+    if (!els.assetPageLabel) return;
+    els.assetPageLabel.textContent = `Halaman ${state.assetPage}`;
+    if (els.assetPrev) {
+      els.assetPrev.disabled = state.assetPage <= 1;
+    }
+    if (els.assetNext) {
+      els.assetNext.disabled = !state.assetHasMore;
+    }
+  };
+
+  const loadAssets = async () => {
+    const params = new URLSearchParams();
+    params.set("limit", "20");
+    params.set("page", String(state.assetPage));
+    if (state.assetFilter?.date_from) params.set("date_from", state.assetFilter.date_from);
+    if (state.assetFilter?.date_to) params.set("date_to", state.assetFilter.date_to);
+    if (state.assetFilter?.type_id) params.set("type_id", state.assetFilter.type_id);
+    if (state.assetFilter?.condition) params.set("condition", state.assetFilter.condition);
+    const data = await api(`/api/assets?${params.toString()}`);
+    state.assets = data.assets || [];
+    state.assetTotal = Number(data.total || state.assets.length || 0);
+    state.assetHasMore = Boolean(data.has_more);
+    state.assetPage = Number(data.page || state.assetPage);
+    renderAssets();
+    updateStats();
+    updateAssetPager();
+  };
+
+  const uploadAssetPhoto = async (assetID, file) => {
+    if (!file) return;
+
+    const csrfToken = getCookie("rck_csrf");
+    const formData = new FormData();
+    formData.append("photo", file);
+
+    const response = await fetch(`/api/assets/${assetID}/photo`, {
+      method: "POST",
+      body: formData,
+      credentials: "same-origin",
+      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || "Upload foto gagal");
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+
+  const resetAssetForm = () => {
+    els.assetForm.reset();
+    els.assetForm.id.value = "";
+    els.assetForm.photo.value = "";
+    if (els.assetForm.condition) {
+      els.assetForm.condition.value = "Baik";
+    }
+    if (els.assetForm.asset_type_id) {
+      els.assetForm.asset_type_id.value = "";
+    }
+    if (els.assetForm.purchase_date) {
+      if (!els.assetForm.purchase_date.value) {
+        els.assetForm.purchase_date.value = todayISO();
+      }
+      requestNextAssetCode(els.assetForm.purchase_date.value, els.assetForm.asset_code);
+    }
+    document.getElementById("asset-submit").textContent = "Simpan Aset";
+  };
+
+  const setupAssets = () => {
+    if (!els.assetForm || !els.assetsTable) return;
+
+    const showForm = () => {
+      els.assetForm.classList.add("active");
+    };
+
+    const hideForm = () => {
+      els.assetForm.classList.remove("active");
+    };
+
+    els.assetFormToggle?.addEventListener("click", () => {
+      if (els.assetForm.classList.contains("active")) {
+        hideForm();
+        return;
+      }
+      resetAssetForm();
+      showForm();
+      els.assetForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    els.assetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const id = els.assetForm.id.value;
+      const payload = {
+        asset_code: els.assetForm.asset_code.value.trim(),
+        name: els.assetForm.name.value.trim(),
+        purchase_date: els.assetForm.purchase_date.value,
+        condition: els.assetForm.condition.value.trim(),
+        asset_type_id: Number(els.assetForm.asset_type_id.value || 0),
+        barcode: els.assetForm.barcode.value.trim(),
+      };
+
+      if (!payload.asset_code || !payload.name || !payload.purchase_date || !payload.condition || payload.asset_type_id <= 0) {
+        setFlash("Semua field aset wajib diisi.", "error");
+        return;
+      }
+
+      try {
+        const endpoint = id ? `/api/assets/${id}` : "/api/assets";
+        const method = id ? "PUT" : "POST";
+        const data = await api(endpoint, { method, body: JSON.stringify(payload) });
+        const assetID = data.asset?.id || Number(id);
+        if (assetID) {
+          await uploadAssetPhoto(assetID, els.assetForm?.photo?.files?.[0]);
+        }
+        setFlash(data.message || "Aset berhasil disimpan.", "success");
+        resetAssetForm();
+        hideForm();
+        await loadAssets();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+
+    els.assetCancel.addEventListener("click", () => {
+      resetAssetForm();
+      hideForm();
+    });
+
+    els.assetsTable.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+
+      const id = Number(button.dataset.id);
+      const asset = state.assets.find((item) => item.id === id);
+      if (!asset) return;
+
+      if (button.dataset.action === "edit-asset") {
+        els.assetForm.id.value = String(asset.id);
+        els.assetForm.asset_code.value = asset.asset_code;
+        els.assetForm.name.value = asset.name;
+        els.assetForm.purchase_date.value = asset.purchase_date;
+        els.assetForm.condition.value = asset.condition;
+        if (els.assetForm.asset_type_id) {
+          els.assetForm.asset_type_id.value = String(asset.asset_type_id || "");
+        }
+        els.assetForm.barcode.value = asset.barcode;
+        els.assetForm.photo.value = "";
+        document.getElementById("asset-submit").textContent = "Update Aset";
+        showForm();
+        activateSection("assets");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (button.dataset.action === "delete-asset") {
+        if (!window.confirm(`Hapus aset ${asset.asset_code}?`)) return;
+        try {
+          const data = await api(`/api/assets/${id}`, { method: "DELETE" });
+          setFlash(data.message || "Aset dihapus.", "success");
+          await loadAssets();
+        } catch (error) {
+          setFlash(error.message, "error");
+        }
+      }
+    });
+  };
+
+  const setupLoanAssetSearch = () => {
+    if (!els.loanAssetSearch || !els.loanAssetResults) return;
+    renderSelectedLoanAssets();
+
+    const hideResults = () => {
+      els.loanAssetResults.classList.remove("active");
+    };
+
+    let searchTimer = null;
+    const searchAssets = async (term) => {
+      if (!term || term.trim().length < 1) {
+        state.loanAssetResults = [];
+        renderLoanAssetResults([]);
+        return;
+      }
+      try {
+        const data = await api(`/api/assets/search?q=${encodeURIComponent(term)}&limit=20`);
+        state.loanAssetResults = data.assets || [];
+        renderLoanAssetResults();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    };
+
+    const debouncedSearch = (term) => {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchAssets(term);
+      }, 250);
+    };
+
+    els.loanAssetSearch.addEventListener("focus", () => {
+      debouncedSearch(els.loanAssetSearch.value);
+    });
+
+    els.loanAssetSearch.addEventListener("input", () => {
+      selectedLoanCandidate = null;
+      debouncedSearch(els.loanAssetSearch.value);
+    });
+
+    els.loanAssetResults.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-asset-id]");
+      if (!button) return;
+      const assetID = button.dataset.assetId;
+      const asset = (state.loanAssetResults || []).find((item) => String(item.id) === String(assetID));
+      if (!asset) return;
+      selectedLoanCandidate = asset;
+      els.loanAssetSearch.value = `${asset.asset_code} - ${asset.name}`;
+      addLoanAsset(asset);
+      selectedLoanCandidate = null;
+      els.loanAssetSearch.value = "";
+      hideResults();
+    });
+
+    els.loanAddAsset?.addEventListener("click", () => {
+      if (selectedLoanCandidate) {
+        addLoanAsset(selectedLoanCandidate);
+        selectedLoanCandidate = null;
+        els.loanAssetSearch.value = "";
+        hideResults();
+        return;
+      }
+      if (els.loanAssetSearch.value.trim()) {
+        const term = els.loanAssetSearch.value.trim().toLowerCase();
+        const match = (state.loanAssetResults || []).find((asset) => {
+          const label = `${asset.asset_code} ${asset.name}`.toLowerCase();
+          return label.includes(term);
+        });
+        if (match) {
+          addLoanAsset(match);
+          els.loanAssetSearch.value = "";
+          selectedLoanCandidate = null;
+          hideResults();
+        }
+      }
+    });
+
+    els.loanSelectedAssets?.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-asset-id]");
+      if (!button) return;
+      const assetID = Number(button.dataset.assetId);
+      selectedLoanAssets = selectedLoanAssets.filter((item) => item.id !== assetID);
+      renderSelectedLoanAssets();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!els.loanAssetResults.classList.contains("active")) return;
+      if (event.target === els.loanAssetSearch) return;
+      if (els.loanAssetResults.contains(event.target)) return;
+      hideResults();
+    });
+  };
+
+  const renderLoans = () => {
+    if (!els.loansTable) return;
+
+    if (state.loans.length === 0) {
+      els.loansTable.innerHTML = '<tr><td colspan="6">Belum ada peminjaman.</td></tr>';
+      return;
+    }
+
+    const rows = [];
+    state.loans.forEach((loan) => {
+      const items = loan.items || [];
+      if (items.length === 0) {
+        rows.push(`
+          <tr>
+            <td>${escapeHtml(loan.borrower_name)}</td>
+            <td>${escapeHtml(loan.borrower_contact || "-")}</td>
+            <td>${escapeHtml(loan.borrow_date)}</td>
+            <td>-</td>
+            <td><span class="status-pill active">Dipinjam</span></td>
+            <td>
+              <div class="row-actions">
+                <button class="tiny-btn" data-action="edit-loan" data-id="${loan.id}">Edit</button>
+                <button class="tiny-btn warn" data-action="delete-loan" data-id="${loan.id}">Hapus</button>
+              </div>
+            </td>
+          </tr>
+        `);
+        return;
+      }
+      items.forEach((item, idx) => {
+        const returned = Boolean(item.return_date);
+        const statusText = returned ? `Dikembalikan ${item.return_date}` : "Dipinjam";
+        const statusClass = returned ? "returned" : "active";
+        rows.push(`
+          <tr>
+            ${idx === 0 ? `<td>${escapeHtml(loan.borrower_name)}</td>` : "<td></td>"}
+            ${idx === 0 ? `<td>${escapeHtml(loan.borrower_contact || "-")}</td>` : "<td></td>"}
+            ${idx === 0 ? `<td>${escapeHtml(loan.borrow_date)}</td>` : "<td></td>"}
+            <td>${escapeHtml(item.asset_code)}<br><small class="muted">${escapeHtml(item.asset_name)}</small></td>
+            <td><span class="status-pill ${statusClass}">${escapeHtml(statusText)}</span></td>
+            <td>
+              <div class="row-actions">
+                ${idx === 0 ? `<button class="tiny-btn" data-action="edit-loan" data-id="${loan.id}">Edit</button>` : ""}
+                ${
+                  returned
+                    ? ""
+                    : `<button class="tiny-btn" data-action="return-loan" data-id="${loan.id}" data-item-id="${item.id}">Kembalikan</button>`
+                }
+                ${idx === 0 ? `<button class="tiny-btn warn" data-action="delete-loan" data-id="${loan.id}">Hapus</button>` : ""}
+              </div>
+            </td>
+          </tr>
+        `);
+      });
+    });
+    els.loansTable.innerHTML = rows.join("");
+  };
+
+  const updateLoanPager = () => {
+    if (!els.loanPageLabel) return;
+    els.loanPageLabel.textContent = `Halaman ${state.loanPage}`;
+    if (els.loanPrev) {
+      els.loanPrev.disabled = state.loanPage <= 1;
+    }
+    if (els.loanNext) {
+      els.loanNext.disabled = !state.loanHasMore;
+    }
+  };
+
+  const loadLoans = async () => {
+    const params = new URLSearchParams();
+    params.set("limit", "20");
+    params.set("page", String(state.loanPage));
+    if (state.loanFilter?.date_from) params.set("date_from", state.loanFilter.date_from);
+    if (state.loanFilter?.date_to) params.set("date_to", state.loanFilter.date_to);
+    const data = await api(`/api/loans?${params.toString()}`);
+    state.loans = data.loans || [];
+    state.loanHasMore = Boolean(data.has_more);
+    state.loanPage = Number(data.page || state.loanPage);
+    renderLoans();
+    updateLoanPager();
+  };
+
+  const resetLoanForm = () => {
+    if (!els.loanForm) return;
+    els.loanForm.reset();
+    els.loanForm.id.value = "";
+    selectedLoanAssets = [];
+    selectedLoanCandidate = null;
+    if (els.loanAssetSearch) els.loanAssetSearch.value = "";
+    renderSelectedLoanAssets();
+    if (els.loanForm.borrow_date && !els.loanForm.borrow_date.value) {
+      els.loanForm.borrow_date.value = todayISO();
+    }
+    document.getElementById("loan-submit").textContent = "Simpan Peminjaman";
+  };
+
+  const setupLoans = () => {
+    if (!els.loanForm || !els.loansTable) return;
+
+    els.loanForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const id = els.loanForm.id.value;
+      const payload = {
+        borrower_name: els.loanForm.borrower_name.value.trim(),
+        borrower_contact: els.loanForm.borrower_contact.value.trim(),
+        borrow_date: els.loanForm.borrow_date.value,
+        notes: els.loanForm.notes.value.trim(),
+        asset_ids: selectedLoanAssets.map((asset) => asset.id),
+      };
+
+      if (!payload.borrower_name || !payload.borrow_date || payload.asset_ids.length === 0) {
+        setFlash("Data peminjaman belum lengkap.", "error");
+        return;
+      }
+
+      try {
+        const endpoint = id ? `/api/loans/${id}` : "/api/loans";
+        const method = id ? "PUT" : "POST";
+        const data = await api(endpoint, { method, body: JSON.stringify(payload) });
+        setFlash(data.message || "Peminjaman tersimpan.", "success");
+        resetLoanForm();
+        await loadLoans();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+
+    els.loanCancel?.addEventListener("click", resetLoanForm);
+
+    els.loansTable.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+
+      const id = Number(button.dataset.id);
+      const loan = state.loans.find((item) => item.id === id);
+      if (!loan) return;
+
+      if (button.dataset.action === "edit-loan") {
+        els.loanForm.id.value = String(loan.id);
+        selectedLoanAssets = (loan.items || []).map((item) => ({
+          id: item.asset_id,
+          asset_code: item.asset_code,
+          name: item.asset_name,
+        }));
+        renderSelectedLoanAssets();
+        if (els.loanAssetSearch) els.loanAssetSearch.value = "";
+        els.loanForm.borrower_name.value = loan.borrower_name;
+        els.loanForm.borrower_contact.value = loan.borrower_contact || "";
+        els.loanForm.borrow_date.value = loan.borrow_date;
+        els.loanForm.notes.value = loan.notes || "";
+        document.getElementById("loan-submit").textContent = "Update Peminjaman";
+        activateSection("loans");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (button.dataset.action === "return-loan") {
+        if (!window.confirm("Tandai aset sudah dikembalikan?")) return;
+        try {
+          const itemId = button.dataset.itemId;
+          const data = await api(`/api/loans/${id}/items/${itemId}/return`, { method: "POST" });
+          setFlash(data.message || "Aset dikembalikan.", "success");
+          await loadLoans();
+        } catch (error) {
+          setFlash(error.message, "error");
+        }
+        return;
+      }
+
+      if (button.dataset.action === "delete-loan") {
+        if (!window.confirm("Hapus data peminjaman ini?")) return;
+        try {
+          const data = await api(`/api/loans/${id}`, { method: "DELETE" });
+          setFlash(data.message || "Peminjaman dihapus.", "success");
+          await loadLoans();
+        } catch (error) {
+          setFlash(error.message, "error");
+        }
+      }
+    });
+  };
+
+  const setupAssetsFilter = () => {
+    if (!els.assetFilter) return;
+
+    const applyFilter = () => {
+      const form = els.assetFilter;
+      state.assetFilter = {
+        date_from: form.date_from.value,
+        date_to: form.date_to.value,
+        type_id: form.type_id.value,
+        condition: form.condition.value,
+      };
+      state.assetPage = 1;
+      loadAssets().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    };
+
+    els.assetFilter.addEventListener("submit", (event) => {
+      event.preventDefault();
+      applyFilter();
+    });
+
+    els.assetFilterToggle?.addEventListener("click", () => {
+      els.assetFilter.classList.toggle("active");
+    });
+
+    els.assetFilterReset?.addEventListener("click", () => {
+      els.assetFilter.reset();
+      state.assetFilter = { date_from: "", date_to: "", type_id: "", condition: "" };
+      state.assetPage = 1;
+      loadAssets().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+
+    els.assetPrev?.addEventListener("click", () => {
+      if (state.assetPage <= 1) return;
+      state.assetPage -= 1;
+      loadAssets().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+
+    els.assetNext?.addEventListener("click", () => {
+      if (!state.assetHasMore) return;
+      state.assetPage += 1;
+      loadAssets().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+  };
+
+  const setupLoanFilter = () => {
+    if (!els.loanFilter) return;
+
+    const applyFilter = () => {
+      const form = els.loanFilter;
+      state.loanFilter = {
+        date_from: form.date_from.value,
+        date_to: form.date_to.value,
+      };
+      state.loanPage = 1;
+      loadLoans().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    };
+
+    els.loanFilter.addEventListener("submit", (event) => {
+      event.preventDefault();
+      applyFilter();
+    });
+
+    els.loanFilterToggle?.addEventListener("click", () => {
+      els.loanFilter.classList.toggle("active");
+    });
+
+    els.loanFilterReset?.addEventListener("click", () => {
+      els.loanFilter.reset();
+      state.loanFilter = { date_from: "", date_to: "" };
+      state.loanPage = 1;
+      loadLoans().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+
+    els.loanPrev?.addEventListener("click", () => {
+      if (state.loanPage <= 1) return;
+      state.loanPage -= 1;
+      loadLoans().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+
+    els.loanNext?.addEventListener("click", () => {
+      if (!state.loanHasMore) return;
+      state.loanPage += 1;
+      loadLoans().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+  };
+
+  const setupAuditFilter = () => {
+    if (!els.auditFilter) return;
+    const applyFilterFromForm = () => {
+      const form = els.auditFilter;
+      const payload = {
+        user: form.user.value.trim(),
+        action: form.action.value.trim(),
+        date_from: form.date_from.value,
+        date_to: form.date_to.value,
+      };
+      state.auditPage = 1;
+      loadAuditLogs(payload).catch((error) => {
+        setFlash(error.message, "error");
+      });
+    };
+
+    els.auditFilter.addEventListener("submit", (event) => {
+      event.preventDefault();
+      applyFilterFromForm();
+    });
+
+    els.auditReset?.addEventListener("click", () => {
+      els.auditFilter.reset();
+      state.auditPage = 1;
+      loadAuditLogs({
+        user: "",
+        action: "",
+        date_from: "",
+        date_to: "",
+      }).catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+
+    els.auditPrev?.addEventListener("click", () => {
+      if (state.auditPage <= 1) return;
+      state.auditPage -= 1;
+      loadAuditLogs().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+
+    els.auditNext?.addEventListener("click", () => {
+      if (!state.auditHasMore) return;
+      state.auditPage += 1;
+      loadAuditLogs().catch((error) => {
+        setFlash(error.message, "error");
+      });
+    });
+  };
+
+  const setupQuickAssetForm = () => {
+    if (!els.quickAssetForm) return;
+    els.quickAssetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = {
+        asset_code: els.quickAssetForm.asset_code.value.trim(),
+        name: els.quickAssetForm.name.value.trim(),
+        purchase_date: els.quickAssetForm.purchase_date.value,
+        condition: els.quickAssetForm.condition.value.trim(),
+        asset_type_id: Number(els.quickAssetForm.asset_type_id.value || 0),
+        barcode: els.quickAssetForm.barcode.value.trim(),
+      };
+
+      if (!payload.asset_code || !payload.name || !payload.purchase_date || !payload.condition || payload.asset_type_id <= 0) {
+        setFlash("Semua field aset wajib diisi.", "error");
+        return;
+      }
+
+      try {
+        const data = await api("/api/assets", { method: "POST", body: JSON.stringify(payload) });
+        const assetID = data.asset?.id;
+        if (assetID) {
+          await uploadAssetPhoto(assetID, els.quickAssetForm?.photo?.files?.[0]);
+        }
+        setFlash(data.message || "Aset berhasil ditambahkan.", "success");
+        els.quickAssetForm.reset();
+        if (els.quickAssetForm.condition) {
+          els.quickAssetForm.condition.value = "Baik";
+        }
+        if (els.quickAssetForm.asset_type_id) {
+          els.quickAssetForm.asset_type_id.value = "";
+        }
+        if (els.quickAssetForm.purchase_date) {
+          if (!els.quickAssetForm.purchase_date.value) {
+            els.quickAssetForm.purchase_date.value = todayISO();
+          }
+          requestNextAssetCode(els.quickAssetForm.purchase_date.value, els.quickAssetForm.asset_code);
+        }
+        await loadAssets();
+      } catch (error) {
+        setFlash(error.message, "error");
+      }
+    });
+  };
+
+  const setupExport = () => {
+    if (!els.exportAssets) return;
+    els.exportAssets.addEventListener("click", () => {
+      window.location.href = "/api/assets/export.csv";
+    });
+  };
+
+  const setupSSE = () => {
+    if (typeof EventSource === "undefined") return;
+    const pending = new Set();
+    let timer = null;
+
+    const flush = async () => {
+      const types = Array.from(pending);
+      pending.clear();
+      timer = null;
+      if (types.includes("all") || types.includes("company")) {
+        await loadCompany();
+      }
+      if (types.includes("all") || types.includes("assets")) {
+        if (state.assetPage === 1) {
+          await loadAssets();
+        }
+      }
+      if (types.includes("all") || types.includes("asset_types")) {
+        await loadAssetTypes();
+      }
+      if (types.includes("all") || types.includes("loans")) {
+        if (state.loanPage === 1) {
+          await loadLoans();
+        }
+      }
+      if (state.me?.role === "admin" && (types.includes("all") || types.includes("users"))) {
+        await loadUsers();
+      }
+      if (state.me?.role === "admin" && (types.includes("all") || types.includes("audit"))) {
+        if (state.auditPage === 1) {
+          await loadAuditLogs();
+        }
+      }
+    };
+
+    const schedule = (type) => {
+      pending.add(type);
+      if (timer) return;
+      timer = setTimeout(() => {
+        flush().catch(() => {
+        });
+      }, 250);
+    };
+
+    const source = new EventSource("/api/events");
+    source.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.type) schedule(payload.type);
+      } catch (_) {
+      }
+    };
+  };
+
+  const setupBarcodeScanner = () => {
+    if (!els.scanModal || !els.scanVideo) return;
+    const ZXingBrowser = window.ZXingBrowser;
+    if (!ZXingBrowser || !ZXingBrowser.BrowserMultiFormatReader) {
+      return;
+    }
+
+    const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+    let activeInput = null;
+    let controls = null;
+
+    const openModal = async (input) => {
+      activeInput = input;
+      els.scanStatus.textContent = "Arahkan kamera ke barcode.";
+      els.scanModal.classList.add("active");
+      els.scanModal.setAttribute("aria-hidden", "false");
+      try {
+        controls = await codeReader.decodeFromVideoDevice(null, els.scanVideo, (result, err) => {
+          if (result) {
+            activeInput.value = result.text;
+            activeInput.dataset.auto = "0";
+            closeModal();
+          } else if (err && err.name !== "NotFoundException") {
+            els.scanStatus.textContent = "Barcode tidak terbaca. Coba lagi dengan lebih jelas.";
+          }
+        });
+      } catch (_) {
+        els.scanStatus.textContent = "Kamera tidak tersedia atau izin ditolak.";
+      }
+    };
+
+    const closeModal = () => {
+      if (controls) {
+        controls.stop();
+        controls = null;
+      }
+      els.scanModal.classList.remove("active");
+      els.scanModal.setAttribute("aria-hidden", "true");
+      activeInput = null;
+    };
+
+    els.scanClose.addEventListener("click", closeModal);
+    els.scanModal.addEventListener("click", (event) => {
+      if (event.target === els.scanModal) closeModal();
+    });
+
+    document.querySelectorAll(".scan-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.scanTarget;
+        const input =
+          target === "quick" ? els.quickAssetForm?.barcode : els.assetForm?.barcode;
+        if (!input) return;
+        if (!window.isSecureContext && location.hostname !== "localhost") {
+          setFlash("Scan kamera butuh HTTPS.", "error");
+          return;
+        }
+        openModal(input);
+      });
+    });
+  };
+
+  const setupPhotoCameraButtons = () => {
+    document.querySelectorAll(".photo-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.photoTarget;
+        const input =
+          target === "quick" ? els.quickAssetForm?.photo : els.assetForm?.photo;
+        if (!input) return;
+        input.click();
+      });
+    });
+  };
+
+  const escapeHtml = (raw) =>
+    String(raw)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+  const bootstrap = async () => {
+    try {
+      setupDrawer();
+      setupMenu();
+      setupScrollSpy();
+      setupMobileAdd();
+      setupLogout();
+      setupCompanyForm();
+      setupAutoAssetCodeInputs();
+      setupTypes();
+      setupUsers();
+      setupAssets();
+      setupAssetsFilter();
+      setupLoanAssetSearch();
+      setupLoans();
+      setupLoanFilter();
+      setupAuditFilter();
+      setupQuickAssetForm();
+      setupExport();
+      setupBarcodeScanner();
+      setupPhotoCameraButtons();
+
+      await loadMe();
+      await loadCompany();
+      applyDefaultPurchaseDates();
+      if (els.quickAssetForm?.purchase_date) {
+        requestNextAssetCode(els.quickAssetForm.purchase_date.value, els.quickAssetForm.asset_code);
+      }
+      if (els.assetForm?.purchase_date) {
+        requestNextAssetCode(els.assetForm.purchase_date.value, els.assetForm.asset_code);
+      }
+      await loadAssetTypes();
+      await loadAssets();
+      applyDefaultLoanDates();
+      await loadLoans();
+      if (state.me?.role === "admin") {
+        await loadUsers();
+        await loadAuditLogs();
+      }
+      setupSSE();
+
+      activateSection("overview");
+    } catch (error) {
+      setFlash(error.message || "Gagal memuat data.", "error");
+    }
+  };
+
+  bootstrap();
+})();
