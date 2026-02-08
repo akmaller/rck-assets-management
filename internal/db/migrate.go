@@ -40,6 +40,9 @@ func Migrate(db *sqlx.DB, driver string) error {
 	if err := ensureAssetTypeTables(db, driver); err != nil {
 		return err
 	}
+	if err := ensureAssetTypeDescriptionColumn(db, driver); err != nil {
+		return err
+	}
 	if err := ensureAssetSequenceColumn(db, driver); err != nil {
 		return err
 	}
@@ -129,6 +132,7 @@ func schemaStatements(driver string) ([]string, error) {
 			`CREATE TABLE IF NOT EXISTS asset_types (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				name TEXT NOT NULL UNIQUE,
+				description TEXT NOT NULL DEFAULT '',
 				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
 			`INSERT OR IGNORE INTO asset_types (id, name) VALUES (1, 'Umum');`,
@@ -194,6 +198,7 @@ func schemaStatements(driver string) ([]string, error) {
 			`CREATE TABLE IF NOT EXISTS asset_types (
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
+				description TEXT NOT NULL DEFAULT '',
 				created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
 			`INSERT INTO asset_types (id, name) VALUES (1, 'Umum') ON CONFLICT (id) DO NOTHING;`,
@@ -259,6 +264,7 @@ func schemaStatements(driver string) ([]string, error) {
 			`CREATE TABLE IF NOT EXISTS asset_types (
 				id BIGINT AUTO_INCREMENT PRIMARY KEY,
 				name VARCHAR(120) NOT NULL UNIQUE,
+				description VARCHAR(255) NOT NULL DEFAULT '',
 				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
 			`INSERT INTO asset_types (id, name) VALUES (1, 'Umum') ON DUPLICATE KEY UPDATE id = id;`,
@@ -393,6 +399,7 @@ func ensureAssetTypeTables(db *sqlx.DB, driver string) error {
 			`CREATE TABLE IF NOT EXISTS asset_types (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				name TEXT NOT NULL UNIQUE,
+				description TEXT NOT NULL DEFAULT '',
 				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
 			`INSERT OR IGNORE INTO asset_types (id, name) VALUES (1, 'Umum');`,
@@ -403,6 +410,7 @@ func ensureAssetTypeTables(db *sqlx.DB, driver string) error {
 			`CREATE TABLE IF NOT EXISTS asset_types (
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
+				description TEXT NOT NULL DEFAULT '',
 				created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
 			`INSERT INTO asset_types (id, name) VALUES (1, 'Umum') ON CONFLICT (id) DO NOTHING;`,
@@ -413,6 +421,7 @@ func ensureAssetTypeTables(db *sqlx.DB, driver string) error {
 			`CREATE TABLE IF NOT EXISTS asset_types (
 				id BIGINT AUTO_INCREMENT PRIMARY KEY,
 				name VARCHAR(120) NOT NULL UNIQUE,
+				description VARCHAR(255) NOT NULL DEFAULT '',
 				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 			);`,
 			`INSERT INTO asset_types (id, name) VALUES (1, 'Umum') ON DUPLICATE KEY UPDATE id = id;`,
@@ -444,6 +453,28 @@ func ensureAssetSequenceColumn(db *sqlx.DB, driver string) error {
 		stmt = `ALTER TABLE assets ADD COLUMN asset_sequence BIGINT NOT NULL DEFAULT 0`
 	case "mysql":
 		stmt = `ALTER TABLE assets ADD COLUMN asset_sequence BIGINT NOT NULL DEFAULT 0`
+	default:
+		return fmt.Errorf("driver tidak didukung: %s", driver)
+	}
+
+	if _, err := db.Exec(stmt); err != nil {
+		if isDuplicateColumnError(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func ensureAssetTypeDescriptionColumn(db *sqlx.DB, driver string) error {
+	var stmt string
+	switch driver {
+	case "sqlite":
+		stmt = `ALTER TABLE asset_types ADD COLUMN description TEXT NOT NULL DEFAULT ''`
+	case "postgres":
+		stmt = `ALTER TABLE asset_types ADD COLUMN description TEXT NOT NULL DEFAULT ''`
+	case "mysql":
+		stmt = `ALTER TABLE asset_types ADD COLUMN description VARCHAR(255) NOT NULL DEFAULT ''`
 	default:
 		return fmt.Errorf("driver tidak didukung: %s", driver)
 	}

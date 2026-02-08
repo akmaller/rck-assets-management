@@ -442,7 +442,8 @@ func (h *Handler) ListAssetTypes(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
 
 func (h *Handler) CreateAssetType(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	type request struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}
 	var req request
 	if err := decodeJSON(r, &req); err != nil {
@@ -454,7 +455,10 @@ func (h *Handler) CreateAssetType(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 		writeError(w, stdhttp.StatusBadRequest, "nama jenis minimal 2 karakter")
 		return
 	}
-	created, err := h.store.CreateAssetType(store.CreateAssetTypeInput{Name: name})
+	created, err := h.store.CreateAssetType(store.CreateAssetTypeInput{
+		Name:        name,
+		Description: strings.TrimSpace(req.Description),
+	})
 	if err != nil {
 		if isUniqueError(err) {
 			writeError(w, stdhttp.StatusConflict, "jenis aset sudah ada")
@@ -468,6 +472,54 @@ func (h *Handler) CreateAssetType(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 		"type":    created,
 	})
 	h.audit(r, "create", "asset_type", created.ID, fmt.Sprintf("name=%s", created.Name))
+	h.notify("asset_types")
+}
+
+func (h *Handler) UpdateAssetType(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	typeID, err := parseIDParam(r, "id")
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, "id jenis aset tidak valid")
+		return
+	}
+
+	type request struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	var req request
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, stdhttp.StatusBadRequest, "payload tidak valid")
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if len(name) < 2 {
+		writeError(w, stdhttp.StatusBadRequest, "nama jenis minimal 2 karakter")
+		return
+	}
+
+	updated, err := h.store.UpdateAssetType(typeID, store.UpdateAssetTypeInput{
+		Name:        name,
+		Description: strings.TrimSpace(req.Description),
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, stdhttp.StatusNotFound, "jenis aset tidak ditemukan")
+			return
+		}
+		if isUniqueError(err) {
+			writeError(w, stdhttp.StatusConflict, "jenis aset sudah ada")
+			return
+		}
+		writeError(w, stdhttp.StatusInternalServerError, "gagal mengubah jenis aset")
+		return
+	}
+
+	writeJSON(w, stdhttp.StatusOK, map[string]any{
+		"message": "jenis aset berhasil diubah",
+		"type":    updated,
+	})
+	h.audit(r, "update", "asset_type", updated.ID, fmt.Sprintf("name=%s", updated.Name))
 	h.notify("asset_types")
 }
 

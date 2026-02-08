@@ -119,13 +119,21 @@ type UpdateAssetInput struct {
 }
 
 type AssetType struct {
-	ID        int64     `db:"id" json:"id"`
-	Name      string    `db:"name" json:"name"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	ID          int64     `db:"id" json:"id"`
+	Name        string    `db:"name" json:"name"`
+	Description string    `db:"description" json:"description"`
+	AssetCount  int64     `db:"asset_count" json:"asset_count"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
 
 type CreateAssetTypeInput struct {
-	Name string
+	Name        string
+	Description string
+}
+
+type UpdateAssetTypeInput struct {
+	Name        string
+	Description string
 }
 
 type Loan struct {
@@ -599,9 +607,15 @@ func (s *Store) UpdateAssetPhoto(id int64, fullPath, thumbPath string) (Asset, e
 func (s *Store) ListAssetTypes() ([]AssetType, error) {
 	types := []AssetType{}
 	query := `
-		SELECT id, name, created_at
-		FROM asset_types
-		ORDER BY name ASC
+		SELECT t.id,
+		       t.name,
+		       COALESCE(t.description, '') AS description,
+		       COALESCE(COUNT(a.id), 0) AS asset_count,
+		       t.created_at
+		FROM asset_types t
+		LEFT JOIN assets a ON a.asset_type_id = t.id
+		GROUP BY t.id, t.name, t.description, t.created_at
+		ORDER BY t.name ASC
 	`
 	err := s.db.Select(&types, query)
 	return types, err
@@ -609,16 +623,25 @@ func (s *Store) ListAssetTypes() ([]AssetType, error) {
 
 func (s *Store) CreateAssetType(input CreateAssetTypeInput) (AssetType, error) {
 	query := s.db.Rebind(`
-		INSERT INTO asset_types (name)
-		VALUES (?)
+		INSERT INTO asset_types (name, description)
+		VALUES (?, ?)
 	`)
-	_, err := s.db.Exec(query, input.Name)
+	_, err := s.db.Exec(query, input.Name, input.Description)
 	if err != nil {
 		return AssetType{}, err
 	}
 
 	var created AssetType
-	getQuery := s.db.Rebind(`SELECT id, name, created_at FROM asset_types WHERE name = ? LIMIT 1`)
+	getQuery := s.db.Rebind(`
+		SELECT t.id,
+		       t.name,
+		       COALESCE(t.description, '') AS description,
+		       COALESCE((SELECT COUNT(1) FROM assets a WHERE a.asset_type_id = t.id), 0) AS asset_count,
+		       t.created_at
+		FROM asset_types t
+		WHERE t.name = ?
+		LIMIT 1
+	`)
 	if err := s.db.Get(&created, getQuery, input.Name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return created, ErrNotFound
@@ -626,6 +649,41 @@ func (s *Store) CreateAssetType(input CreateAssetTypeInput) (AssetType, error) {
 		return created, err
 	}
 	return created, nil
+}
+
+func (s *Store) UpdateAssetType(id int64, input UpdateAssetTypeInput) (AssetType, error) {
+	query := s.db.Rebind(`
+		UPDATE asset_types
+		SET name = ?, description = ?
+		WHERE id = ?
+	`)
+	res, err := s.db.Exec(query, input.Name, input.Description, id)
+	if err != nil {
+		return AssetType{}, err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return AssetType{}, ErrNotFound
+	}
+
+	var updated AssetType
+	getQuery := s.db.Rebind(`
+		SELECT t.id,
+		       t.name,
+		       COALESCE(t.description, '') AS description,
+		       COALESCE((SELECT COUNT(1) FROM assets a WHERE a.asset_type_id = t.id), 0) AS asset_count,
+		       t.created_at
+		FROM asset_types t
+		WHERE t.id = ?
+		LIMIT 1
+	`)
+	if err := s.db.Get(&updated, getQuery, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return updated, ErrNotFound
+		}
+		return updated, err
+	}
+	return updated, nil
 }
 
 func (s *Store) DeleteAssetType(id int64) error {

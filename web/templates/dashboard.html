@@ -283,12 +283,18 @@
         <p class="muted">Tambahkan kategori/jenis aset agar konsisten pada input.</p>
 
         <form id="type-form" class="form-grid" novalidate>
+          <input type="hidden" name="id">
           <label>
             Nama Jenis
             <input type="text" name="name" required>
           </label>
+          <label>
+            Keterangan
+            <input type="text" name="description" placeholder="Keterangan jenis aset">
+          </label>
           <div class="inline-actions full-width">
-            <button type="submit" class="btn btn-primary">Tambah Jenis</button>
+            <button type="submit" class="btn btn-primary" id="type-submit">Tambah Jenis</button>
+            <button type="button" class="btn btn-outline" id="type-cancel">Batal Edit</button>
           </div>
         </form>
 
@@ -297,6 +303,8 @@
             <thead>
               <tr>
                 <th>Nama Jenis</th>
+                <th>Keterangan</th>
+                <th>Jumlah Aset</th>
                 <th>Aksi</th>
               </tr>
             </thead>
@@ -558,6 +566,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-11" defer></script>
+  <script src="/static/app.js?v=20260208-14" defer></script>
 </body>
 </html>

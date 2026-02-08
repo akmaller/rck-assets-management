@@ -36,6 +36,7 @@ func NewRouter(handler *Handler) stdhttp.Handler {
 
 			secure.Get("/asset-types", handler.ListAssetTypes)
 			secure.Post("/asset-types", handler.CreateAssetType)
+			secure.Put("/asset-types/{id}", handler.UpdateAssetType)
 
 			secure.Get("/assets", handler.ListAssets)
 			secure.Get("/assets/search", handler.SearchAssets)

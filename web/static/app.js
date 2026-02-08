@@ -58,6 +58,8 @@
     companyForm: document.getElementById("company-form"),
     quickAssetForm: document.getElementById("quick-asset-form"),
     typeForm: document.getElementById("type-form"),
+    typeSubmit: document.getElementById("type-submit"),
+    typeCancel: document.getElementById("type-cancel"),
     typesTable: document.getElementById("types-table"),
     userForm: document.getElementById("user-form"),
     userCancel: document.getElementById("user-cancel"),
@@ -640,7 +642,7 @@
   const renderTypes = () => {
     if (!els.typesTable) return;
     if (state.assetTypes.length === 0) {
-      els.typesTable.innerHTML = '<tr><td colspan="2">Belum ada jenis aset.</td></tr>';
+      els.typesTable.innerHTML = '<tr><td colspan="4">Belum ada jenis aset.</td></tr>';
       return;
     }
     els.typesTable.innerHTML = state.assetTypes
@@ -648,8 +650,11 @@
         (type) => `
           <tr>
             <td>${escapeHtml(type.name)}</td>
+            <td>${escapeHtml(type.description || "-")}</td>
+            <td>${escapeHtml(String(Number(type.asset_count || 0)))}</td>
             <td>
               <div class="row-actions">
+                <button class="tiny-btn" data-action="edit-type" data-id="${type.id}">Edit</button>
                 <button class="tiny-btn warn" data-action="delete-type" data-id="${type.id}">Hapus</button>
               </div>
             </td>
@@ -774,6 +779,18 @@
     document.getElementById("user-submit").textContent = "Simpan User";
   };
 
+  const resetTypeForm = () => {
+    if (!els.typeForm) return;
+    const typeIDInput = els.typeForm.querySelector('input[name="id"]');
+    els.typeForm.reset();
+    if (typeIDInput) {
+      typeIDInput.value = "";
+    }
+    if (els.typeSubmit) {
+      els.typeSubmit.textContent = "Tambah Jenis";
+    }
+  };
+
   const setupUsers = () => {
     if (!els.userForm || !els.usersTable) return;
 
@@ -852,31 +869,59 @@
 
   const setupTypes = () => {
     if (!els.typeForm || !els.typesTable) return;
+    const typeIDInput = els.typeForm.querySelector('input[name="id"]');
+
     els.typeForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const id = typeIDInput?.value?.trim() || "";
       const payload = {
         name: els.typeForm.name.value.trim(),
+        description: els.typeForm.description?.value?.trim() || "",
       };
       if (!payload.name) {
         setFlash("Nama jenis wajib diisi.", "error");
         return;
       }
       try {
-        const data = await api("/api/asset-types", { method: "POST", body: JSON.stringify(payload) });
-        setFlash(data.message || "Jenis aset ditambahkan.", "success");
-        els.typeForm.reset();
+        const endpoint = id ? `/api/asset-types/${id}` : "/api/asset-types";
+        const method = id ? "PUT" : "POST";
+        const data = await api(endpoint, { method, body: JSON.stringify(payload) });
+        setFlash(data.message || (id ? "Jenis aset diubah." : "Jenis aset ditambahkan."), "success");
+        resetTypeForm();
         await loadAssetTypes();
       } catch (error) {
         setFlash(error.message, "error");
       }
     });
 
+    els.typeCancel?.addEventListener("click", resetTypeForm);
+
     els.typesTable.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
+
       const id = Number(button.dataset.id);
       const type = state.assetTypes.find((item) => item.id === id);
       if (!type) return;
+
+      if (button.dataset.action === "edit-type") {
+        if (typeIDInput) {
+          typeIDInput.value = String(type.id);
+        }
+        els.typeForm.name.value = type.name || "";
+        if (els.typeForm.description) {
+          els.typeForm.description.value = type.description || "";
+        }
+        if (els.typeSubmit) {
+          els.typeSubmit.textContent = "Update Jenis";
+        }
+        activateSection("types");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (button.dataset.action !== "delete-type") return;
+
       const ok = await confirmDialog(`Hapus jenis ${type.name}?`, {
         title: "Hapus Jenis Aset",
         confirmText: "Hapus",
