@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260208-22">
+  <link rel="stylesheet" href="/static/styles.css?v=20260208-23">
   <link id="favicon-link" rel="icon" href="/static/favicon.svg">
   <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js" defer></script>
 </head>
@@ -133,11 +133,11 @@
           </label>
           <label>
             Logo Utama
-            <input type="file" name="logo" accept="image/*" capture="environment">
+            <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
           </label>
           <label>
             Favicon
-            <input type="file" name="favicon" accept="image/*" capture="environment">
+            <input type="file" name="favicon" accept="image/png,image/jpeg,image/webp,image/svg+xml">
           </label>
           <label class="full-width">
             Alamat
@@ -554,6 +554,44 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="company-media-backdrop" hidden></div>
+  <div class="modal company-media-modal" id="company-media-modal" role="dialog" aria-modal="true" aria-labelledby="company-media-title" hidden>
+    <div class="modal-card company-media-card">
+      <div class="modal-header">
+        <strong id="company-media-title">Upload Media</strong>
+        <button type="button" class="icon-btn company-media-close" id="company-media-close" aria-label="Tutup upload media">
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="company-media-upload-stage">
+          <p class="muted small" id="company-media-upload-label">Mengupload file...</p>
+          <div class="import-progress-track">
+            <span class="import-progress-fill" id="company-media-upload-fill"></span>
+          </div>
+          <small class="muted small" id="company-media-upload-text">0%</small>
+        </div>
+
+        <div id="company-media-crop-stage" hidden>
+          <p class="muted small">Geser gambar lalu zoom untuk crop rasio 1:1.</p>
+          <div class="company-media-crop-wrap">
+            <canvas id="company-media-crop-canvas" width="360" height="360"></canvas>
+          </div>
+          <label class="company-media-zoom">
+            Zoom
+            <input type="range" id="company-media-zoom" min="100" max="400" step="1" value="100">
+          </label>
+          <small class="muted small" id="company-media-crop-note">Hasil crop akan disimpan sebagai PNG transparan.</small>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="company-media-cancel">Batal</button>
+        <button type="button" class="btn btn-primary" id="company-media-apply">Gunakan Hasil Crop</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="loan-backdrop" hidden></div>
   <div class="modal loan-modal" id="loan-modal" role="dialog" aria-modal="true" aria-labelledby="loan-modal-title" hidden>
     <div class="modal-card loan-modal-card">
@@ -637,6 +675,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-19" defer></script>
+  <script src="/static/app.js?v=20260208-24" defer></script>
 </body>
 </html>

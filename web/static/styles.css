@@ -1251,6 +1251,66 @@ td .row-actions {
   transition: width 0.18s ease;
 }
 
+.company-media-modal {
+  z-index: 67;
+}
+
+#company-media-backdrop {
+  z-index: 66;
+}
+
+.company-media-card {
+  width: min(540px, 95vw);
+}
+
+.company-media-close {
+  width: 34px;
+  height: 34px;
+}
+
+.company-media-close span {
+  width: 16px;
+}
+
+.company-media-close span:first-child {
+  transform: rotate(45deg);
+}
+
+.company-media-close span:last-child {
+  transform: rotate(-45deg);
+  margin-top: -7px;
+}
+
+.company-media-crop-wrap {
+  margin-top: 0.55rem;
+  width: min(360px, 82vw);
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--gray-300);
+  border-radius: 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, #ecece8 25%, transparent 25%, transparent 75%, #ecece8 75%, #ecece8),
+    linear-gradient(45deg, #ecece8 25%, transparent 25%, transparent 75%, #ecece8 75%, #ecece8);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+#company-media-crop-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+#company-media-crop-canvas:active {
+  cursor: grabbing;
+}
+
+.company-media-zoom {
+  margin-top: 0.65rem;
+}
+
 .loan-modal {
   z-index: 65;
 }

@@ -56,6 +56,20 @@
     footerCompanyName: document.getElementById("footer-company-name"),
     faviconLink: document.getElementById("favicon-link"),
     companyForm: document.getElementById("company-form"),
+    companyMediaModal: document.getElementById("company-media-modal"),
+    companyMediaBackdrop: document.getElementById("company-media-backdrop"),
+    companyMediaTitle: document.getElementById("company-media-title"),
+    companyMediaClose: document.getElementById("company-media-close"),
+    companyMediaUploadStage: document.getElementById("company-media-upload-stage"),
+    companyMediaUploadLabel: document.getElementById("company-media-upload-label"),
+    companyMediaUploadFill: document.getElementById("company-media-upload-fill"),
+    companyMediaUploadText: document.getElementById("company-media-upload-text"),
+    companyMediaCropStage: document.getElementById("company-media-crop-stage"),
+    companyMediaCropCanvas: document.getElementById("company-media-crop-canvas"),
+    companyMediaZoom: document.getElementById("company-media-zoom"),
+    companyMediaCropNote: document.getElementById("company-media-crop-note"),
+    companyMediaCancel: document.getElementById("company-media-cancel"),
+    companyMediaApply: document.getElementById("company-media-apply"),
     quickAssetForm: document.getElementById("quick-asset-form"),
     typeForm: document.getElementById("type-form"),
     typeSubmit: document.getElementById("type-submit"),
@@ -485,25 +499,466 @@
     }
   };
 
-  const uploadCompanyMedia = async (type, file) => {
-    if (!file) return;
-    const csrfToken = getCookie("rck_csrf");
-    const formData = new FormData();
-    formData.append("photo", file);
-    const response = await fetch(`/api/settings/company/${type}`, {
-      method: "POST",
-      body: formData,
-      credentials: "same-origin",
-      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  const uploadCompanyMediaWithProgress = (type, file, onProgress) =>
+    new Promise((resolve, reject) => {
+      const csrfToken = getCookie("rck_csrf");
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/settings/company/${type}`, true);
+      xhr.withCredentials = true;
+      if (csrfToken) {
+        xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+      }
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable || typeof onProgress !== "function") return;
+        onProgress((event.loaded / event.total) * 100);
+      };
+      xhr.onerror = () => reject(new Error("upload gagal, cek koneksi lalu coba lagi"));
+      xhr.onload = () => {
+        const data = (() => {
+          try {
+            return JSON.parse(xhr.responseText || "{}");
+          } catch (_) {
+            return {};
+          }
+        })();
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+          return;
+        }
+        reject(new Error(data.error || "upload gagal"));
+      };
+
+      xhr.send(formData);
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error || "Upload gagal");
-      error.status = response.status;
-      throw error;
+
+  const setupCompanyMediaCrop = () => {
+    if (!els.companyForm || !els.companyMediaModal || !els.companyMediaCropCanvas || !els.companyMediaZoom) return;
+
+    const MEDIA_MODAL_ANIM_MS = 180;
+    const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+    const ALLOWED_COMPANY_MEDIA_EXT = [".png", ".jpg", ".jpeg", ".webp", ".svg"];
+    const cropCanvas = els.companyMediaCropCanvas;
+    const cropCtx = cropCanvas.getContext("2d", { alpha: true });
+    if (!cropCtx) return;
+
+    const cropState = {
+      type: "",
+      image: null,
+      fileName: "",
+      objectURL: "",
+      minScale: 1,
+      scale: 1,
+      maxScale: 4,
+      offsetX: 0,
+      offsetY: 0,
+      dragging: false,
+      pointerId: 0,
+      startX: 0,
+      startY: 0,
+      startOffsetX: 0,
+      startOffsetY: 0,
+      busy: false,
+      flowId: 0,
+    };
+
+    const setBusy = (busy) => {
+      cropState.busy = Boolean(busy);
+      if (els.companyMediaApply) {
+        els.companyMediaApply.disabled = cropState.busy;
+      }
+      if (els.companyMediaCancel) {
+        els.companyMediaCancel.disabled = cropState.busy;
+      }
+      if (els.companyMediaClose) {
+        els.companyMediaClose.disabled = cropState.busy;
+      }
+      if (els.companyMediaZoom) {
+        els.companyMediaZoom.disabled = cropState.busy;
+      }
+    };
+
+    const updateUploadProgress = (percent) => {
+      const value = Math.max(0, Math.min(100, Number(percent) || 0));
+      if (els.companyMediaUploadFill) {
+        els.companyMediaUploadFill.style.width = `${value}%`;
+      }
+      if (els.companyMediaUploadText) {
+        els.companyMediaUploadText.textContent = `${Math.round(value)}%`;
+      }
+    };
+
+    const showUploadStage = (labelText) => {
+      if (els.companyMediaUploadLabel) {
+        els.companyMediaUploadLabel.textContent = labelText;
+      }
+      if (els.companyMediaUploadStage) {
+        els.companyMediaUploadStage.hidden = false;
+      }
+      if (els.companyMediaCropStage) {
+        els.companyMediaCropStage.hidden = true;
+      }
+      if (els.companyMediaApply) {
+        els.companyMediaApply.hidden = true;
+      }
+      updateUploadProgress(0);
+    };
+
+    const showCropStage = () => {
+      if (els.companyMediaUploadStage) {
+        els.companyMediaUploadStage.hidden = true;
+      }
+      if (els.companyMediaCropStage) {
+        els.companyMediaCropStage.hidden = false;
+      }
+      if (els.companyMediaApply) {
+        els.companyMediaApply.hidden = false;
+      }
+    };
+
+    const openMediaModal = (titleText) => {
+      if (els.companyMediaTitle) {
+        els.companyMediaTitle.textContent = titleText;
+      }
+      els.companyMediaModal.hidden = false;
+      els.companyMediaBackdrop.hidden = false;
+      requestAnimationFrame(() => {
+        els.companyMediaModal.classList.add("show");
+        els.companyMediaBackdrop.classList.add("show");
+      });
+    };
+
+    const cleanupObjectURL = () => {
+      if (cropState.objectURL) {
+        URL.revokeObjectURL(cropState.objectURL);
+        cropState.objectURL = "";
+      }
+    };
+
+    const resetCropState = () => {
+      cleanupObjectURL();
+      cropState.type = "";
+      cropState.image = null;
+      cropState.fileName = "";
+      cropState.minScale = 1;
+      cropState.scale = 1;
+      cropState.maxScale = 4;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      cropState.dragging = false;
+      cropState.pointerId = 0;
+      if (els.companyMediaZoom) {
+        els.companyMediaZoom.value = "100";
+      }
+      cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+    };
+
+    const closeMediaModal = () => {
+      if (cropState.busy) return;
+      els.companyMediaModal.classList.remove("show");
+      els.companyMediaBackdrop.classList.remove("show");
+      const closeFlowId = cropState.flowId + 1;
+      cropState.flowId = closeFlowId;
+      setTimeout(() => {
+        if (cropState.flowId !== closeFlowId) return;
+        els.companyMediaModal.hidden = true;
+        els.companyMediaBackdrop.hidden = true;
+        resetCropState();
+      }, MEDIA_MODAL_ANIM_MS);
+    };
+
+    const clampOffsets = () => {
+      if (!cropState.image) return;
+      const width = cropCanvas.width;
+      const height = cropCanvas.height;
+      const scaledW = cropState.image.width * cropState.scale;
+      const scaledH = cropState.image.height * cropState.scale;
+      const minX = Math.min(0, width - scaledW);
+      const minY = Math.min(0, height - scaledH);
+      cropState.offsetX = Math.max(minX, Math.min(0, cropState.offsetX));
+      cropState.offsetY = Math.max(minY, Math.min(0, cropState.offsetY));
+    };
+
+    const drawCropCanvas = () => {
+      if (!cropState.image) return;
+      clampOffsets();
+      cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+      cropCtx.imageSmoothingEnabled = true;
+      cropCtx.imageSmoothingQuality = "high";
+      cropCtx.drawImage(
+        cropState.image,
+        cropState.offsetX,
+        cropState.offsetY,
+        cropState.image.width * cropState.scale,
+        cropState.image.height * cropState.scale,
+      );
+    };
+
+    const applyZoom = (sliderValue, anchorX = null, anchorY = null) => {
+      if (!cropState.image) return;
+      const ratio = Math.max(1, Number(sliderValue) || 100) / 100;
+      const nextScale = cropState.minScale * ratio;
+      const prevScale = cropState.scale;
+      if (prevScale <= 0) return;
+
+      const ax = anchorX === null ? cropCanvas.width / 2 : anchorX;
+      const ay = anchorY === null ? cropCanvas.height / 2 : anchorY;
+      const relX = (ax - cropState.offsetX) / prevScale;
+      const relY = (ay - cropState.offsetY) / prevScale;
+
+      cropState.scale = Math.max(cropState.minScale, Math.min(cropState.maxScale, nextScale));
+      cropState.offsetX = ax - relX * cropState.scale;
+      cropState.offsetY = ay - relY * cropState.scale;
+      drawCropCanvas();
+    };
+
+    const prepareCropForImage = (image, inputFile, type) => {
+      const width = cropCanvas.width;
+      const height = cropCanvas.height;
+      cropState.image = image;
+      cropState.type = type;
+      cropState.fileName = inputFile?.name || "";
+      cropState.minScale = Math.max(width / image.width, height / image.height);
+      cropState.scale = cropState.minScale;
+      cropState.maxScale = cropState.minScale * 4;
+      cropState.offsetX = (width - image.width * cropState.scale) / 2;
+      cropState.offsetY = (height - image.height * cropState.scale) / 2;
+
+      if (els.companyMediaZoom) {
+        els.companyMediaZoom.value = "100";
+      }
+      if (els.companyMediaCropNote) {
+        const isSVGInput = String(inputFile?.type || "").toLowerCase().includes("svg") ||
+          String(inputFile?.name || "").toLowerCase().endsWith(".svg");
+        els.companyMediaCropNote.textContent = isSVGInput
+          ? "Input SVG tetap didukung. Hasil crop disimpan sebagai PNG transparan."
+          : "Hasil crop akan disimpan sebagai PNG transparan.";
+      }
+      drawCropCanvas();
+    };
+
+    const readFileWithProgress = (file) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          updateUploadProgress((event.loaded / event.total) * 100);
+        };
+        reader.onerror = () => reject(new Error("gagal membaca file upload"));
+        reader.onload = () => resolve();
+        reader.readAsArrayBuffer(file);
+      });
+
+    const loadImageFromFile = (file) =>
+      new Promise((resolve, reject) => {
+        const objectURL = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => resolve({ img, objectURL });
+        img.onerror = () => {
+          URL.revokeObjectURL(objectURL);
+          reject(new Error("file gambar tidak dapat diproses"));
+        };
+        img.src = objectURL;
+      });
+
+    const isAllowedCompanyMedia = (file) => {
+      if (!file) return false;
+      const type = String(file.type || "").toLowerCase();
+      const fileName = String(file.name || "").toLowerCase();
+      const allowedMime = [
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/svg+xml",
+      ];
+      if (allowedMime.includes(type)) return true;
+      return ALLOWED_COMPANY_MEDIA_EXT.some((ext) => fileName.endsWith(ext));
+    };
+
+    const uploadCroppedCompanyMedia = async () => {
+      if (!cropState.image || !cropState.type) {
+        setFlash("Gambar belum siap untuk diproses.", "error");
+        return;
+      }
+
+      const targetSize = cropState.type === "favicon" ? 160 : 512;
+      const outputCanvas = document.createElement("canvas");
+      outputCanvas.width = targetSize;
+      outputCanvas.height = targetSize;
+      const outputCtx = outputCanvas.getContext("2d", { alpha: true });
+      if (!outputCtx) {
+        setFlash("Editor crop tidak tersedia.", "error");
+        return;
+      }
+
+      const ratio = targetSize / cropCanvas.width;
+      outputCtx.imageSmoothingEnabled = true;
+      outputCtx.imageSmoothingQuality = "high";
+      outputCtx.drawImage(
+        cropState.image,
+        cropState.offsetX * ratio,
+        cropState.offsetY * ratio,
+        cropState.image.width * cropState.scale * ratio,
+        cropState.image.height * cropState.scale * ratio,
+      );
+
+      const blob = await new Promise((resolve, reject) => {
+        outputCanvas.toBlob((value) => {
+          if (!value) {
+            reject(new Error("gagal membuat hasil crop"));
+            return;
+          }
+          resolve(value);
+        }, "image/png");
+      });
+
+      const croppedFile = new File([blob], `${cropState.type}-cropped.png`, { type: "image/png" });
+      showUploadStage("Mengupload hasil crop...");
+      setBusy(true);
+
+      try {
+        const data = await uploadCompanyMediaWithProgress(cropState.type, croppedFile, updateUploadProgress);
+        updateUploadProgress(100);
+        state.company = data.setting || state.company;
+        applyBranding();
+        setBusy(false);
+        setFlash(data.message || "Media berhasil diperbarui.", "success");
+        closeMediaModal();
+      } catch (error) {
+        setBusy(false);
+        showCropStage();
+        setFlash(error.message || "Upload media gagal.", "error");
+      }
+    };
+
+    const beginCompanyMediaFlow = async (type, file) => {
+      if (!file) return;
+      if (!isAllowedCompanyMedia(file)) {
+        setFlash("Format file tidak didukung. Gunakan PNG, JPG, WEBP, atau SVG.", "error");
+        return;
+      }
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        setFlash("Ukuran file maksimal 10 MB.", "error");
+        return;
+      }
+
+      const flowId = cropState.flowId + 1;
+      cropState.flowId = flowId;
+      resetCropState();
+      setBusy(false);
+      openMediaModal(type === "favicon" ? "Upload Favicon" : "Upload Logo");
+      showUploadStage("Menyiapkan file...");
+
+      try {
+        await readFileWithProgress(file);
+        if (flowId !== cropState.flowId) return;
+        updateUploadProgress(100);
+        const loaded = await loadImageFromFile(file);
+        if (flowId !== cropState.flowId) {
+          URL.revokeObjectURL(loaded.objectURL);
+          return;
+        }
+        cleanupObjectURL();
+        cropState.objectURL = loaded.objectURL;
+        prepareCropForImage(loaded.img, file, type);
+        showCropStage();
+      } catch (error) {
+        if (flowId !== cropState.flowId) return;
+        setFlash(error.message || "Gagal memproses file upload.", "error");
+        closeMediaModal();
+      }
+    };
+
+    cropCanvas.addEventListener("pointerdown", (event) => {
+      if (els.companyMediaCropStage?.hidden || cropState.busy) return;
+      cropState.dragging = true;
+      cropState.pointerId = event.pointerId;
+      cropState.startX = event.clientX;
+      cropState.startY = event.clientY;
+      cropState.startOffsetX = cropState.offsetX;
+      cropState.startOffsetY = cropState.offsetY;
+      cropCanvas.setPointerCapture(event.pointerId);
+    });
+    cropCanvas.addEventListener("pointermove", (event) => {
+      if (!cropState.dragging || event.pointerId !== cropState.pointerId) return;
+      const dx = event.clientX - cropState.startX;
+      const dy = event.clientY - cropState.startY;
+      cropState.offsetX = cropState.startOffsetX + dx;
+      cropState.offsetY = cropState.startOffsetY + dy;
+      drawCropCanvas();
+    });
+    const endDrag = (event) => {
+      if (!cropState.dragging || event.pointerId !== cropState.pointerId) return;
+      cropState.dragging = false;
+      cropState.pointerId = 0;
+    };
+    cropCanvas.addEventListener("pointerup", endDrag);
+    cropCanvas.addEventListener("pointercancel", endDrag);
+
+    cropCanvas.addEventListener(
+      "wheel",
+      (event) => {
+        if (els.companyMediaCropStage?.hidden || cropState.busy) return;
+        event.preventDefault();
+        const current = Number(els.companyMediaZoom?.value || 100);
+        const delta = event.deltaY < 0 ? 8 : -8;
+        const next = Math.max(100, Math.min(400, current + delta));
+        if (els.companyMediaZoom) {
+          els.companyMediaZoom.value = String(next);
+        }
+        const rect = cropCanvas.getBoundingClientRect();
+        applyZoom(next, event.clientX - rect.left, event.clientY - rect.top);
+      },
+      { passive: false },
+    );
+
+    els.companyMediaZoom?.addEventListener("input", () => {
+      applyZoom(els.companyMediaZoom.value);
+    });
+
+    els.companyMediaClose?.addEventListener("click", closeMediaModal);
+    els.companyMediaCancel?.addEventListener("click", closeMediaModal);
+    els.companyMediaBackdrop?.addEventListener("click", closeMediaModal);
+    els.companyMediaModal?.addEventListener("click", (event) => {
+      if (event.target === els.companyMediaModal) {
+        closeMediaModal();
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !els.companyMediaModal.hidden) {
+        closeMediaModal();
+      }
+    });
+
+    els.companyMediaApply?.addEventListener("click", () => {
+      uploadCroppedCompanyMedia().catch((error) => {
+        setBusy(false);
+        setFlash(error.message || "Gagal memproses crop media.", "error");
+      });
+    });
+
+    if (els.companyForm.logo) {
+      els.companyForm.logo.addEventListener("change", () => {
+        const file = els.companyForm.logo.files?.[0];
+        els.companyForm.logo.value = "";
+        beginCompanyMediaFlow("logo", file).catch((error) => {
+          setFlash(error.message || "Gagal memproses logo.", "error");
+        });
+      });
     }
-    state.company = data.setting || state.company;
-    applyBranding();
+
+    if (els.companyForm.favicon) {
+      els.companyForm.favicon.addEventListener("change", () => {
+        const file = els.companyForm.favicon.files?.[0];
+        els.companyForm.favicon.value = "";
+        beginCompanyMediaFlow("favicon", file).catch((error) => {
+          setFlash(error.message || "Gagal memproses favicon.", "error");
+        });
+      });
+    }
   };
 
   const setupCompanyForm = () => {
@@ -525,10 +980,6 @@
         });
         state.company = data.setting;
         updateStats();
-        await uploadCompanyMedia("logo", els.companyForm.logo?.files?.[0]);
-        await uploadCompanyMedia("favicon", els.companyForm.favicon?.files?.[0]);
-        if (els.companyForm.logo) els.companyForm.logo.value = "";
-        if (els.companyForm.favicon) els.companyForm.favicon.value = "";
         setFlash(data.message || "Identitas perusahaan diperbarui.", "success");
       } catch (error) {
         setFlash(error.message, "error");
@@ -2304,6 +2755,7 @@
         setupConfirmDialog();
         setupAssetPhotoPreview();
         setupCompanyForm();
+        setupCompanyMediaCrop();
         setupAutoAssetCodeInputs();
         setupTypes();
       setupUsers();
