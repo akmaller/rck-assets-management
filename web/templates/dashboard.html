@@ -38,7 +38,7 @@
       </div>
 
       <nav class="menu" id="menu-nav">
-        <button class="menu-link active" data-section="overview">Ringkasan</button>
+        <button class="menu-link active" data-section="overview">Tambah Aset</button>
         <button class="menu-link" data-section="assets">Manajemen Aset</button>
         <button class="menu-link" data-section="loans">Peminjaman</button>
         <button class="menu-link" data-section="types">Jenis Aset</button>
@@ -64,68 +64,50 @@
       <div id="flash" class="flash" aria-live="polite"></div>
 
       <section id="section-overview" class="panel active" data-section="overview">
-        <h3>Ringkasan Sistem</h3>
-        <div class="stat-grid">
-          <article class="stat-card">
-            <p>Total Aset</p>
-            <strong id="stat-assets">0</strong>
-          </article>
-          <article class="stat-card">
-            <p>Total Users</p>
-            <strong id="stat-users">0</strong>
-          </article>
-          <article class="stat-card">
-            <p>Perusahaan</p>
-            <strong id="stat-company">-</strong>
-          </article>
-        </div>
-
-        <div class="overview-actions">
-          <h4>Tambah Aset Cepat</h4>
-          <form id="quick-asset-form" class="form-grid compact-grid" novalidate>
-            <label>
-              ID Aset
-              <input type="text" name="asset_code" required>
-            </label>
-            <label>
-              Nama Aset
-              <input type="text" name="name" required>
-            </label>
-            <label>
-              Tanggal Pembelian
-              <input type="date" name="purchase_date" required>
-            </label>
-            <label>
-              Kondisi
-              <select name="condition" required>
-                <option value="Baik" selected>Baik</option>
-                <option value="Perlu Servis">Perlu Servis</option>
-                <option value="Rusak">Rusak</option>
-              </select>
-            </label>
-            <label>
-              Jenis Aset
-              <select name="asset_type_id" required>
-                <option value="">Pilih jenis aset</option>
-              </select>
-            </label>
-            <label>
-              Barcode
-              <div class="input-row">
-                <input type="text" name="barcode">
-                <button type="button" class="btn btn-outline scan-btn" data-scan-target="quick">Scan</button>
-              </div>
-            </label>
-            <label>
-              Foto Aset
-              <input class="file-input-hidden" type="file" name="photo" accept="image/*" capture="environment">
-              <button type="button" class="btn btn-outline photo-btn" data-photo-target="quick">Ambil Foto</button>
-            </label>
-            <div class="inline-actions full-width">
-              <button type="submit" class="btn btn-primary">Tambah Aset</button>
+        <h3>Tambah Aset</h3>
+        <form id="quick-asset-form" class="form-grid compact-grid" novalidate>
+          <label>
+            ID Aset
+            <input type="text" name="asset_code" required>
+          </label>
+          <label>
+            Nama Aset
+            <input type="text" name="name" required>
+          </label>
+          <label>
+            Tanggal Pembelian
+            <input type="date" name="purchase_date" required>
+          </label>
+          <label>
+            Kondisi
+            <select name="condition" required>
+              <option value="Baik" selected>Baik</option>
+              <option value="Perlu Servis">Perlu Servis</option>
+              <option value="Rusak">Rusak</option>
+            </select>
+          </label>
+          <label>
+            Jenis Aset
+            <select name="asset_type_id" required>
+              <option value="">Pilih jenis aset</option>
+            </select>
+          </label>
+          <label>
+            Barcode
+            <div class="input-row">
+              <input type="text" name="barcode">
+              <button type="button" class="btn btn-outline scan-btn" data-scan-target="quick">Scan</button>
             </div>
-          </form>
-        </div>
+          </label>
+          <label>
+            Foto Aset
+            <input class="file-input-hidden" type="file" name="photo" accept="image/*" capture="environment">
+            <button type="button" class="btn btn-outline photo-btn" data-photo-target="quick">Ambil Foto</button>
+          </label>
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary">Tambah Aset</button>
+          </div>
+        </form>
       </section>
 
       <section id="section-company" class="panel" data-section="company">
@@ -617,6 +599,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-17" defer></script>
+  <script src="/static/app.js?v=20260208-18" defer></script>
 </body>
 </html>

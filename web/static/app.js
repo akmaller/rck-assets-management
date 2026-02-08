@@ -383,9 +383,15 @@
   };
 
   const updateStats = () => {
-    els.statAssets.textContent = String(state.assetTotal || 0);
-    els.statUsers.textContent = state.me?.role === "admin" ? String(state.users.length || 0) : "-";
-    els.statCompany.textContent = state.company?.company_name || "Belum diisi";
+    if (els.statAssets) {
+      els.statAssets.textContent = String(state.assetTotal || 0);
+    }
+    if (els.statUsers) {
+      els.statUsers.textContent = state.me?.role === "admin" ? String(state.users.length || 0) : "-";
+    }
+    if (els.statCompany) {
+      els.statCompany.textContent = state.company?.company_name || "Belum diisi";
+    }
   };
 
   const setupLogout = () => {
