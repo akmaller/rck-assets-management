@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/styles.css?v=20260208-31">
   <link id="favicon-link" rel="icon" href="/static/favicon.svg">
   <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js" defer></script>
+  <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" defer></script>
 </head>
 <body class="dashboard-body">
   <div class="dashboard-layout" id="dashboard-layout">
@@ -611,6 +612,27 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" id="company-media-cancel">Batal</button>
         <button type="button" class="btn btn-primary" id="company-media-apply">Gunakan Hasil Crop</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="print-backdrop" hidden></div>
+  <div class="modal print-modal" id="print-modal" role="dialog" aria-modal="true" aria-labelledby="print-title" hidden>
+    <div class="modal-card print-card">
+      <div class="modal-header">
+        <strong id="print-title">Preview Label Aset</strong>
+        <button type="button" class="icon-btn print-close" id="print-close" aria-label="Tutup preview">
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="print-preview-wrap">
+          <img id="print-preview" class="print-preview" src="" alt="Preview label aset">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" id="print-download">Unduh</button>
+        </div>
       </div>
     </div>
   </div>

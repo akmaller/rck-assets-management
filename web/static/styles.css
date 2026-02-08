@@ -1678,6 +1678,53 @@ td .row-actions {
   z-index: 66;
 }
 
+.print-modal {
+  z-index: 69;
+}
+
+#print-backdrop {
+  z-index: 68;
+}
+
+.print-card {
+  width: min(760px, 96vw);
+}
+
+.print-preview-wrap {
+  width: 100%;
+  border: 1px solid var(--gray-300);
+  border-radius: 14px;
+  background: #fff;
+  padding: 0.6rem;
+  display: grid;
+  place-items: center;
+}
+
+.print-preview {
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+  display: block;
+}
+
+.print-close {
+  width: 34px;
+  height: 34px;
+}
+
+.print-close span {
+  width: 16px;
+}
+
+.print-close span:first-child {
+  transform: rotate(45deg);
+}
+
+.print-close span:last-child {
+  transform: rotate(-45deg);
+  margin-top: -7px;
+}
+
 .company-media-card {
   width: min(540px, 95vw);
 }
