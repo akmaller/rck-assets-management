@@ -296,6 +296,25 @@ select:focus {
   color: var(--black);
 }
 
+.mobile-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+}
+
+.mobile-action-btn .action-btn-icon {
+  display: none;
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+.mobile-action-btn .action-btn-label {
+  display: inline;
+}
+
 .inline-message {
   min-height: 1.3rem;
   font-size: 0.9rem;
@@ -997,6 +1016,19 @@ td .row-actions {
   .table-wrap {
     border-left: 0;
     border-right: 0;
+  }
+
+  .section-actions .mobile-action-btn {
+    min-width: 40px;
+    padding: 0.56rem 0.62rem;
+  }
+
+  .section-actions .mobile-action-btn .action-btn-label {
+    display: none;
+  }
+
+  .section-actions .mobile-action-btn .action-btn-icon {
+    display: block;
   }
 }
 

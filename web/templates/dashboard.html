@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260208-10">
+  <link rel="stylesheet" href="/static/styles.css?v=20260208-20">
   <link id="favicon-link" rel="icon" href="/static/favicon.svg">
   <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js" defer></script>
 </head>
@@ -300,10 +300,30 @@
       <section id="section-assets" class="panel" data-section="assets">
         <h3>Manajemen Aset</h3>
         <div class="section-actions">
-          <button type="button" class="btn btn-outline" id="export-assets">Export CSV</button>
-          <button type="button" class="btn btn-outline" id="import-assets">Import CSV</button>
-          <button type="button" class="btn btn-outline" id="asset-filter-toggle">Filter</button>
-          <button type="button" class="btn btn-primary" id="asset-form-toggle">Tambah Aset</button>
+          <button type="button" class="btn btn-outline mobile-action-btn" id="export-assets" aria-label="Export CSV" title="Export CSV">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 20h14v-2H5v2zM11 4v8H8l4 4 4-4h-3V4h-2z"/>
+            </svg>
+            <span class="action-btn-label">Export CSV</span>
+          </button>
+          <button type="button" class="btn btn-outline mobile-action-btn" id="import-assets" aria-label="Import CSV" title="Import CSV">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 20h14v-2H5v2zM11 20h2v-8h3l-4-4-4 4h3v8z"/>
+            </svg>
+            <span class="action-btn-label">Import CSV</span>
+          </button>
+          <button type="button" class="btn btn-outline mobile-action-btn" id="asset-filter-toggle" aria-label="Filter" title="Filter">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 5h18l-7 8v5l-4 2v-7L3 5z"/>
+            </svg>
+            <span class="action-btn-label">Filter</span>
+          </button>
+          <button type="button" class="btn btn-primary mobile-action-btn" id="asset-form-toggle" aria-label="Tambah Aset" title="Tambah Aset">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"/>
+            </svg>
+            <span class="action-btn-label">Tambah Aset</span>
+          </button>
         </div>
 
         <form id="asset-form" class="form-grid form-panel" novalidate>
@@ -410,10 +430,30 @@
         <h3>Peminjaman Aset</h3>
         <p class="muted">Catat aset yang dipinjam oleh pihak lain.</p>
         <div class="section-actions">
-          <button type="button" class="btn btn-outline" id="export-loans">Export CSV</button>
-          <button type="button" class="btn btn-outline" id="import-loans">Import CSV</button>
-          <button type="button" class="btn btn-outline" id="loan-filter-toggle">Filter</button>
-          <button type="button" class="btn btn-primary" id="loan-create-btn">Buat Pinjaman</button>
+          <button type="button" class="btn btn-outline mobile-action-btn" id="export-loans" aria-label="Export CSV" title="Export CSV">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 20h14v-2H5v2zM11 4v8H8l4 4 4-4h-3V4h-2z"/>
+            </svg>
+            <span class="action-btn-label">Export CSV</span>
+          </button>
+          <button type="button" class="btn btn-outline mobile-action-btn" id="import-loans" aria-label="Import CSV" title="Import CSV">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 20h14v-2H5v2zM11 20h2v-8h3l-4-4-4 4h3v8z"/>
+            </svg>
+            <span class="action-btn-label">Import CSV</span>
+          </button>
+          <button type="button" class="btn btn-outline mobile-action-btn" id="loan-filter-toggle" aria-label="Filter" title="Filter">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 5h18l-7 8v5l-4 2v-7L3 5z"/>
+            </svg>
+            <span class="action-btn-label">Filter</span>
+          </button>
+          <button type="button" class="btn btn-primary mobile-action-btn" id="loan-create-btn" aria-label="Buat Pinjaman" title="Buat Pinjaman">
+            <svg class="action-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"/>
+            </svg>
+            <span class="action-btn-label">Buat Pinjaman</span>
+          </button>
         </div>
 
         <form id="loan-filter" class="form-grid compact-grid filter-panel" novalidate>
@@ -597,6 +637,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-18" defer></script>
+  <script src="/static/app.js?v=20260208-19" defer></script>
 </body>
 </html>
