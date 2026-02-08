@@ -70,6 +70,27 @@ Default login:
 
 Di bawah ini contoh deploy produksi menggunakan `systemd` + reverse proxy (Nginx).
 
+### 0) Pastikan Go 1.22+ (penting)
+
+Jika muncul error seperti:
+```
+go.mod file indicates go 1.22, but maximum version supported by tidy is 1.18
+```
+maka Go di server masih lama. Upgrade ke 1.22+ sebelum lanjut:
+
+```bash
+sudo apt remove -y golang-go || true
+sudo apt autoremove -y
+cd /tmp
+wget https://go.dev/dl/go1.22.10.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go1.22.10.linux-amd64.tar.gz
+echo 'export PATH=/usr/local/go/bin:$PATH' | sudo tee /etc/profile.d/go.sh
+source /etc/profile.d/go.sh
+go version
+```
+
+
 ### 1) Siapkan user dan folder aplikasi
 
 ```bash
@@ -86,7 +107,10 @@ cp .env.example .env
 ```
 
 Edit `.env` sesuai kebutuhan. Untuk SQLite, pastikan `DB_DRIVER=sqlite` dan file DB berada di folder yang bisa ditulis.
-
+Disarankan gunakan path absolut agar tidak masalah di `systemd`:
+```
+DB_DSN=/opt/rck-assets/data/rck_assets.db
+```
 ### 2) Install dependency
 
 ```bash
@@ -99,9 +123,11 @@ sudo apt install -y golang-go nginx
 ```bash
 cd /opt/rck-assets
 go mod tidy
-go build -o rck-assets ./cmd/server
+go build -buildvcs=false -o rck-assets ./cmd/server
 sudo chown rckassets:rckassets rck-assets
 ```
+
+Catatan: jika build gagal dengan `error obtaining VCS status`, gunakan `-buildvcs=false` seperti di atas.
 
 ### 4) Buat service systemd
 
@@ -133,7 +159,7 @@ sudo systemctl enable --now rck-assets
 sudo systemctl status rck-assets
 ```
 
-Secara default aplikasi berjalan di `:8080`.
+Secara default aplikasi berjalan di `:8080`. Jika di `.env` kamu set `HTTP_ADDR` ke port lain (mis. `:8444`), sesuaikan semua `proxy_pass` ke port tersebut.
 
 ### 5) Konfigurasi Nginx (reverse proxy)
 
@@ -175,7 +201,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Opsional: pasang SSL (Let’s Encrypt) via `certbot`.
+Opsional: pasang SSL (Let's Encrypt) via `certbot`.
 
 ## Deploy via aaPanel / Panel Lain
 
@@ -183,16 +209,41 @@ Jika memakai aaPanel, CyberPanel, Plesk, atau panel lain, intinya sama: buat sit
 
 **Pengaturan yang perlu diperhatikan:**
 
-- **Reverse proxy ke** `http://127.0.0.1:8080`
+- **Reverse proxy ke** `http://127.0.0.1:8080` (sesuaikan port dengan `HTTP_ADDR`)
 - **Header forward**: `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`
 - **Disable proxy buffering** untuk endpoint SSE ` /api/events `
 - **Max upload size** minimal `15m` (karena ada upload foto aset & logo)
+- **Matikan PHP** jika panel menambahkan konfigurasi PHP default
 
 Contoh aturan di panel (pseudo):
 
-- Route `/` -> `http://127.0.0.1:8080`
-- Route `/api/events` -> `http://127.0.0.1:8080` dengan `proxy_buffering off`
+- Route `/` -> `http://127.0.0.1:8080` (sesuaikan port)
+- Route `/api/events` -> `http://127.0.0.1:8080` (sesuaikan port) dengan `proxy_buffering off`
 - `client_max_body_size 15m`
+
+Contoh reload nginx pada aaPanel:
+
+```bash
+/www/server/nginx/sbin/nginx -t
+/www/server/nginx/sbin/nginx -s reload
+```
+
+## Troubleshooting Umum
+
+- **Aplikasi tetap jalan di `:8080` padahal `.env` set `HTTP_ADDR`**  
+  Pastikan `EnvironmentFile` dan `WorkingDirectory` benar di `systemd`, lalu `daemon-reload` dan restart service.
+
+- **`connect database: unable to open database file (14)`**  
+  Folder DB tidak writable. Pastikan owner/permission dan gunakan path absolut di `DB_DSN`.
+
+- **`attempt to write a readonly database (8)`**  
+  User service tidak punya izin write ke file SQLite. Samakan user service dengan owner folder/DB.
+
+- **`error obtaining VCS status` saat build**  
+  Gunakan `go build -buildvcs=false ...`.
+
+- **Domain tidak bisa diakses**  
+  Cek DNS A record mengarah ke IP server. Jika `dig` belum resolve, tunggu propagasi.
 
 ## Catatan Database Produksi
 
