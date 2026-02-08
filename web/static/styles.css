@@ -219,6 +219,10 @@ label {
   padding: 1rem;
   border: 1px solid var(--gray-300);
   box-shadow: var(--shadow);
+  max-height: min(90vh, 760px);
+  max-height: min(90dvh, 760px);
+  overflow: auto;
+  overscroll-behavior: contain;
   transform: translateY(10px) scale(0.98);
   transition: transform 0.2s ease;
 }
@@ -254,6 +258,11 @@ label {
 
 #scan-video {
   width: 100%;
+  display: block;
+  height: auto;
+  max-height: min(58vh, 500px);
+  max-height: min(58dvh, 500px);
+  object-fit: contain;
   border-radius: 12px;
   border: 1px solid var(--gray-300);
   background: #0f0f0f;
@@ -1488,6 +1497,16 @@ td .row-actions {
 
   .select-mobile-title {
     font-size: 0.92rem;
+  }
+
+  .scan-card {
+    max-height: min(88vh, 680px);
+    max-height: min(88dvh, 680px);
+  }
+
+  #scan-video {
+    max-height: min(46vh, 420px);
+    max-height: min(46dvh, 420px);
   }
 }
 .modal-backdrop {

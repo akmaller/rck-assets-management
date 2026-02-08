@@ -1117,6 +1117,11 @@ func (h *Handler) DecodeBarcodeFromPhoto(w stdhttp.ResponseWriter, r *stdhttp.Re
 }
 
 func decodeBarcodeText(img image.Image) (string, string, error) {
+	decodeHints := map[gozxing.DecodeHintType]interface{}{
+		gozxing.DecodeHintType_TRY_HARDER:   true,
+		gozxing.DecodeHintType_ALSO_INVERTED: true,
+	}
+
 	readers := []func() gozxing.Reader{
 		oned.NewCode128Reader,
 		oned.NewCode39Reader,
@@ -1130,25 +1135,170 @@ func decodeBarcodeText(img image.Image) (string, string, error) {
 		qrcode.NewQRCodeReader,
 	}
 
-	for _, newReader := range readers {
-		bitmap, err := gozxing.NewBinaryBitmapFromImage(img)
+	for _, variant := range buildDecodeImageVariants(img) {
+		bitmap, err := gozxing.NewBinaryBitmapFromImage(variant)
 		if err != nil {
-			return "", "", err
-		}
-		reader := newReader()
-		result, err := reader.DecodeWithoutHints(bitmap)
-		reader.Reset()
-		if err != nil || result == nil {
 			continue
 		}
-		value := strings.TrimSpace(result.GetText())
-		if value == "" {
-			continue
+		for _, newReader := range readers {
+			reader := newReader()
+			result, err := reader.Decode(bitmap, decodeHints)
+			if err != nil || result == nil {
+				result, err = reader.DecodeWithoutHints(bitmap)
+			}
+			reader.Reset()
+			if err != nil || result == nil {
+				continue
+			}
+			value := strings.TrimSpace(result.GetText())
+			if value == "" {
+				continue
+			}
+			return value, fmt.Sprintf("%v", result.GetBarcodeFormat()), nil
 		}
-		return value, fmt.Sprintf("%v", result.GetBarcodeFormat()), nil
 	}
 
 	return "", "", errors.New("barcode tidak ditemukan")
+}
+
+func buildDecodeImageVariants(img image.Image) []image.Image {
+	if img == nil {
+		return nil
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return []image.Image{img}
+	}
+
+	type decodeVariant struct {
+		crop    float64
+		scale   float64
+		anchors [][2]float64
+	}
+
+	variants := []decodeVariant{
+		{
+			crop:  1,
+			scale: 1.3,
+			anchors: [][2]float64{
+				{0.5, 0.5},
+			},
+		},
+		{
+			crop:  0.82,
+			scale: 1.7,
+			anchors: [][2]float64{
+				{0.5, 0.5},
+				{0, 0.5},
+				{1, 0.5},
+				{0.5, 0},
+				{0.5, 1},
+			},
+		},
+		{
+			crop:  0.66,
+			scale: 2.1,
+			anchors: [][2]float64{
+				{0.5, 0.5},
+				{0, 0.5},
+				{1, 0.5},
+				{0.5, 0},
+				{0.5, 1},
+				{0, 0},
+				{1, 0},
+				{0, 1},
+				{1, 1},
+			},
+		},
+	}
+
+	results := make([]image.Image, 0, 18)
+	seen := make(map[string]struct{})
+
+	appendVariant := func(src image.Image, sx, sy, cropW, cropH int, scale float64) {
+		key := fmt.Sprintf("%d:%d:%d:%d:%.2f", sx, sy, cropW, cropH, scale)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+
+		rect := image.Rect(bounds.Min.X+sx, bounds.Min.Y+sy, bounds.Min.X+sx+cropW, bounds.Min.Y+sy+cropH)
+		cropped := cropImage(src, rect)
+		if scale > 1 {
+			cropped = scaleImage(cropped, scale)
+		}
+		results = append(results, cropped)
+	}
+
+	for _, variant := range variants {
+		cropW := int(math.Round(float64(width) * variant.crop))
+		cropH := int(math.Round(float64(height) * variant.crop))
+		if cropW < 1 {
+			cropW = 1
+		}
+		if cropH < 1 {
+			cropH = 1
+		}
+		if cropW > width {
+			cropW = width
+		}
+		if cropH > height {
+			cropH = height
+		}
+
+		maxSX := width - cropW
+		maxSY := height - cropH
+		for _, anchor := range variant.anchors {
+			sx := int(math.Round(float64(maxSX) * anchor[0]))
+			sy := int(math.Round(float64(maxSY) * anchor[1]))
+			if sx < 0 {
+				sx = 0
+			}
+			if sy < 0 {
+				sy = 0
+			}
+			if sx > maxSX {
+				sx = maxSX
+			}
+			if sy > maxSY {
+				sy = maxSY
+			}
+			appendVariant(img, sx, sy, cropW, cropH, variant.scale)
+		}
+	}
+
+	if len(results) == 0 {
+		return []image.Image{img}
+	}
+	return results
+}
+
+func cropImage(img image.Image, rect image.Rectangle) image.Image {
+	dst := image.NewRGBA(image.Rect(0, 0, rect.Dx(), rect.Dy()))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, rect, draw.Over, nil)
+	return dst
+}
+
+func scaleImage(img image.Image, scale float64) image.Image {
+	if scale <= 1 {
+		return img
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	newW := int(math.Round(float64(width) * scale))
+	newH := int(math.Round(float64(height) * scale))
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
+	return dst
 }
 
 func (h *Handler) ExportAssetsCSV(w stdhttp.ResponseWriter, r *stdhttp.Request) {

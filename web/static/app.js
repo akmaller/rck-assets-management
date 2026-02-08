@@ -3269,32 +3269,82 @@
 
     const buildScanCanvases = (source, width, height) => {
       if (!source || !width || !height) return [];
+
       const variants = [
-        { crop: 1, upscale: 1 },
-        { crop: 0.82, upscale: 1.4 },
-        { crop: 0.66, upscale: 1.9 },
-        { crop: 0.5, upscale: 2.35 },
+        {
+          crop: 1,
+          upscale: 1,
+          anchors: [[0.5, 0.5]],
+        },
+        {
+          crop: 0.82,
+          upscale: 1.4,
+          anchors: [
+            [0.5, 0.5],
+            [0, 0.5],
+            [1, 0.5],
+            [0.5, 0],
+            [0.5, 1],
+          ],
+        },
+        {
+          crop: 0.66,
+          upscale: 1.9,
+          anchors: [
+            [0.5, 0.5],
+            [0, 0.5],
+            [1, 0.5],
+            [0.5, 0],
+            [0.5, 1],
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ],
+        },
+        {
+          crop: 0.5,
+          upscale: 2.35,
+          anchors: [
+            [0.5, 0.5],
+            [0, 0.5],
+            [1, 0.5],
+            [0.5, 0],
+            [0.5, 1],
+          ],
+        },
       ];
 
-      return variants
-        .map((variant) => {
-          const cropW = Math.max(1, Math.round(width * variant.crop));
-          const cropH = Math.max(1, Math.round(height * variant.crop));
-          const sx = Math.max(0, Math.floor((width - cropW) / 2));
-          const sy = Math.max(0, Math.floor((height - cropH) / 2));
-          const outW = Math.min(2200, Math.max(360, Math.round(cropW * variant.upscale)));
-          const outH = Math.min(2200, Math.max(360, Math.round(cropH * variant.upscale)));
+      const canvases = [];
+      const seen = new Set();
+
+      variants.forEach((variant) => {
+        const cropW = Math.max(1, Math.round(width * variant.crop));
+        const cropH = Math.max(1, Math.round(height * variant.crop));
+        const maxSX = Math.max(0, width - cropW);
+        const maxSY = Math.max(0, height - cropH);
+        const outW = Math.min(2200, Math.max(360, Math.round(cropW * variant.upscale)));
+        const outH = Math.min(2200, Math.max(360, Math.round(cropH * variant.upscale)));
+
+        variant.anchors.forEach(([ax, ay]) => {
+          const sx = Math.max(0, Math.min(maxSX, Math.round(maxSX * ax)));
+          const sy = Math.max(0, Math.min(maxSY, Math.round(maxSY * ay)));
+          const key = `${sx}:${sy}:${cropW}:${cropH}:${outW}:${outH}`;
+          if (seen.has(key)) return;
+          seen.add(key);
 
           const canvas = document.createElement("canvas");
           canvas.width = outW;
           canvas.height = outH;
           const context = canvas.getContext("2d");
-          if (!context) return null;
+          if (!context) return;
           context.imageSmoothingEnabled = false;
           context.drawImage(source, sx, sy, cropW, cropH, 0, 0, outW, outH);
-          return canvas;
-        })
-        .filter(Boolean);
+          canvases.push(canvas);
+        });
+      });
+
+      return canvases;
     };
 
     const decodeCanvasLocal = async (canvas) => {
@@ -3332,8 +3382,8 @@
     const decodeCanvasServer = async (canvas) => {
       if (!canvas) return "";
       try {
-        const blob = await toBlob(canvas);
-        const file = new File([blob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+        const blob = await toBlob(canvas, "image/png");
+        const file = new File([blob], `scan-${Date.now()}.png`, { type: "image/png" });
         const value = await decodeBarcodeFromPhoto(file);
         return String(value || "").trim();
       } catch (_) {
