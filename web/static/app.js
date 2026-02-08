@@ -316,10 +316,69 @@
     return data;
   };
 
+  let menuIndicator = null;
+  const ensureMenuIndicator = () => {
+    if (!els.menuNav) return null;
+    if (menuIndicator && els.menuNav.contains(menuIndicator)) {
+      return menuIndicator;
+    }
+    const indicator = document.createElement("span");
+    indicator.className = "menu-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    els.menuNav.prepend(indicator);
+    menuIndicator = indicator;
+    return indicator;
+  };
+
+  const findActiveVisibleMenuLink = () => {
+    if (!els.menuNav) return null;
+    const links = Array.from(els.menuNav.querySelectorAll(".menu-link.active"));
+    return links.find((link) => {
+      if (!(link instanceof HTMLElement)) return false;
+      if (link.style.display === "none") return false;
+      if (window.getComputedStyle(link).display === "none") return false;
+      return true;
+    }) || null;
+  };
+
+  const syncMenuIndicator = () => {
+    const indicator = ensureMenuIndicator();
+    if (!indicator || !els.menuNav) return;
+    const activeLink = findActiveVisibleMenuLink();
+    if (!activeLink) {
+      indicator.classList.remove("show");
+      return;
+    }
+
+    const menuRect = els.menuNav.getBoundingClientRect();
+    const linkRect = activeLink.getBoundingClientRect();
+    const x = linkRect.left - menuRect.left;
+    const y = linkRect.top - menuRect.top;
+    indicator.style.width = `${Math.round(linkRect.width)}px`;
+    indicator.style.height = `${Math.round(linkRect.height)}px`;
+    indicator.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+    indicator.classList.add("show");
+  };
+
+  const queueMenuIndicatorSync = () => {
+    requestAnimationFrame(() => {
+      syncMenuIndicator();
+    });
+  };
+
+  const setupMenuIndicator = () => {
+    if (!els.menuNav) return;
+    ensureMenuIndicator();
+    queueMenuIndicatorSync();
+    window.addEventListener("resize", queueMenuIndicatorSync);
+    window.addEventListener("orientationchange", queueMenuIndicatorSync);
+  };
+
   const activateSection = (name) => {
     const links = Array.from(document.querySelectorAll(".menu-link"));
     links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
     els.panels.forEach((panel) => panel.classList.toggle("active", panel.id === `section-${name}`));
+    queueMenuIndicatorSync();
     closeDrawer();
   };
 
@@ -375,6 +434,7 @@
     const setActiveBySection = (name) => {
       const links = Array.from(document.querySelectorAll(".menu-link"));
       links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
+      queueMenuIndicatorSync();
     };
 
     const observer = new IntersectionObserver(
@@ -451,6 +511,7 @@
     setElementVisible(els.importAssets, admin);
     setElementVisible(els.exportLoans, admin);
     setElementVisible(els.importLoans, admin);
+    queueMenuIndicatorSync();
   };
 
   const loadMe = async () => {
@@ -2832,6 +2893,7 @@
       try {
         setupDrawer();
         setupMenu();
+        setupMenuIndicator();
         setupScrollSpy();
         setupMobileAdd();
         setupLogout();
