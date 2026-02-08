@@ -279,6 +279,30 @@ label {
   flex: 1 1 140px;
 }
 
+.scan-lookup-result {
+  margin-top: 0.7rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 12px;
+  padding: 0.7rem;
+  background: #fafaf8;
+}
+
+.scan-lookup-result strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.scan-lookup-result .scan-lookup-code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1rem;
+}
+
+.scan-lookup-result .scan-lookup-meta {
+  margin-top: 0.25rem;
+  color: var(--gray-700);
+  font-size: 0.88rem;
+}
+
 input,
 textarea,
 select {
@@ -771,12 +795,30 @@ body.select-mobile-open {
 }
 
 .mobile-add {
-  margin-left: auto;
+  margin-left: 0;
   margin-right: 0.15rem;
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   border-radius: 12px;
   white-space: nowrap;
+}
+
+.mobile-scan {
+  margin-left: auto;
+  padding: 0.5rem 0.62rem;
+  min-width: 42px;
+  border-radius: 12px;
+  line-height: 0;
+}
+
+.mobile-scan svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .drawer-backdrop {
@@ -1476,6 +1518,11 @@ td .row-actions {
   .mobile-add {
     font-size: 0.8rem;
     padding: 0.45rem 0.6rem;
+  }
+
+  .mobile-scan {
+    padding: 0.45rem 0.55rem;
+    min-width: 38px;
   }
 
   .input-row {

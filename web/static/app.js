@@ -52,6 +52,7 @@
     sidebarBrandName: document.getElementById("sidebar-brand-name"),
     mobileBrandName: document.getElementById("mobile-brand-name"),
     mobileLogo: document.getElementById("mobile-logo"),
+    mobileScanAsset: document.getElementById("mobile-scan-asset"),
     mobileAddAsset: document.getElementById("mobile-add-asset"),
     sidebarLogo: document.getElementById("sidebar-logo"),
     footerCompanyName: document.getElementById("footer-company-name"),
@@ -157,6 +158,7 @@
     scanCapture: document.getElementById("scan-capture"),
     scanUpload: document.getElementById("scan-upload"),
     scanFile: document.getElementById("scan-file"),
+    scanLookupResult: document.getElementById("scan-lookup-result"),
     menuToggle: document.getElementById("menu-toggle"),
     drawerBackdrop: document.getElementById("drawer-backdrop"),
     layout: document.getElementById("dashboard-layout"),
@@ -3186,6 +3188,8 @@
     let assistTimerID = 0;
     let assistBusy = false;
     let assistAttempt = 0;
+    let scanPurpose = "fill";
+    let lookupBusy = false;
 
     const isLocalHost =
       location.hostname === "localhost" ||
@@ -3242,9 +3246,6 @@
         if (Array.isArray(caps?.focusMode) && caps.focusMode.includes("continuous")) {
           advanced.push({ focusMode: "continuous" });
         }
-        if (caps?.zoom && Number.isFinite(caps.zoom.max) && caps.zoom.max > 1) {
-          advanced.push({ zoom: Math.min(2, caps.zoom.max) });
-        }
         if (advanced.length > 0) {
           await track.applyConstraints({ advanced });
         }
@@ -3267,18 +3268,32 @@
         );
       });
 
-    const buildScanCanvases = (source, width, height) => {
+    const buildScanCanvases = (source, width, height, options = {}) => {
       if (!source || !width || !height) return [];
+      const profile = options.profile === "fast" ? "fast" : "full";
 
       const variants = [
         {
           crop: 1,
           upscale: 1,
           anchors: [[0.5, 0.5]],
+          pad: 0.08,
         },
         {
-          crop: 0.82,
-          upscale: 1.4,
+          crop: 1,
+          upscale: 0.8,
+          anchors: [[0.5, 0.5]],
+          pad: 0.08,
+        },
+        {
+          crop: 1,
+          upscale: 0.62,
+          anchors: [[0.5, 0.5]],
+          pad: 0.08,
+        },
+        {
+          crop: 0.86,
+          upscale: 1.2,
           anchors: [
             [0.5, 0.5],
             [0, 0.5],
@@ -3286,10 +3301,11 @@
             [0.5, 0],
             [0.5, 1],
           ],
+          pad: 0.08,
         },
         {
           crop: 0.66,
-          upscale: 1.9,
+          upscale: 1.6,
           anchors: [
             [0.5, 0.5],
             [0, 0.5],
@@ -3301,24 +3317,17 @@
             [0, 1],
             [1, 1],
           ],
-        },
-        {
-          crop: 0.5,
-          upscale: 2.35,
-          anchors: [
-            [0.5, 0.5],
-            [0, 0.5],
-            [1, 0.5],
-            [0.5, 0],
-            [0.5, 1],
-          ],
+          pad: 0.08,
         },
       ];
+
+      const fastVariants = variants.slice(0, 4);
+      const selectedVariants = profile === "fast" ? fastVariants : variants;
 
       const canvases = [];
       const seen = new Set();
 
-      variants.forEach((variant) => {
+      selectedVariants.forEach((variant) => {
         const cropW = Math.max(1, Math.round(width * variant.crop));
         const cropH = Math.max(1, Math.round(height * variant.crop));
         const maxSX = Math.max(0, width - cropW);
@@ -3338,8 +3347,14 @@
           canvas.height = outH;
           const context = canvas.getContext("2d");
           if (!context) return;
+          const paddingRatio = Math.max(0, Number(variant.pad || 0));
+          const padPx = Math.max(4, Math.round(Math.min(outW, outH) * paddingRatio));
+          const drawW = Math.max(1, outW - padPx * 2);
+          const drawH = Math.max(1, outH - padPx * 2);
+          context.fillStyle = "#fff";
+          context.fillRect(0, 0, outW, outH);
           context.imageSmoothingEnabled = false;
-          context.drawImage(source, sx, sy, cropW, cropH, 0, 0, outW, outH);
+          context.drawImage(source, sx, sy, cropW, cropH, padPx, padPx, drawW, drawH);
           canvases.push(canvas);
         });
       });
@@ -3366,7 +3381,7 @@
       if (!reader) return "";
       let url = "";
       try {
-        const blob = await toBlob(canvas);
+        const blob = await toBlob(canvas, "image/png");
         url = URL.createObjectURL(blob);
         const result = await reader.decodeFromImageUrl(url);
         const value = String(result?.text || "").trim();
@@ -3392,7 +3407,7 @@
     };
 
     const robustDecodeFromSource = async (source, width, height, options = {}) => {
-      const canvases = buildScanCanvases(source, width, height);
+      const canvases = buildScanCanvases(source, width, height, options);
       if (canvases.length === 0) return "";
       const allowServer = Boolean(options.allowServer);
       const serverLimit = Math.max(0, Number(options.serverLimit || 0));
@@ -3437,17 +3452,17 @@
             els.scanVideo.videoWidth,
             els.scanVideo.videoHeight,
             {
+              profile: "fast",
               allowServer: assistAttempt % 4 === 0,
               serverLimit: 1,
             },
           );
           if (value) {
-            applyScannedValue(value);
-            closeModal();
+            await handleDetectedValue(value);
             return;
           }
           if (assistAttempt % 2 === 0) {
-            els.scanStatus.textContent = "Belum terbaca. Dekatkan barcode dan tahan kamera tetap stabil.";
+            els.scanStatus.textContent = "Belum terbaca. Coba sesuaikan jarak kamera (terlalu dekat juga bisa gagal).";
           }
         } finally {
           assistBusy = false;
@@ -3466,7 +3481,11 @@
     const setMode = (nextMode) => {
       mode = nextMode === "photo" ? "photo" : "barcode";
       if (els.scanTitle) {
-        els.scanTitle.textContent = mode === "photo" ? "Ambil Foto Aset" : "Scan Barcode";
+        if (mode === "photo") {
+          els.scanTitle.textContent = "Ambil Foto Aset";
+        } else {
+          els.scanTitle.textContent = scanPurpose === "lookup" ? "Scan ID Aset" : "Scan Barcode";
+        }
       }
       if (els.scanUseCamera) {
         els.scanUseCamera.textContent = "Gunakan Kamera";
@@ -3477,7 +3496,9 @@
       els.scanStatus.textContent =
         mode === "photo"
           ? "Klik Gunakan Kamera lalu Ambil Gambar, atau pilih file."
-          : "Pilih kamera atau upload foto barcode.";
+          : scanPurpose === "lookup"
+            ? "Arahkan kamera ke QR/Barcode ID aset."
+            : "Pilih kamera atau upload foto barcode.";
       setCaptureButton(false);
     };
 
@@ -3519,6 +3540,7 @@
       hideModal();
       activeInput = null;
       activePhotoInput = null;
+      setScanPurpose("fill");
       setMode("barcode");
     };
 
@@ -3526,6 +3548,89 @@
       if (!activeInput) return;
       activeInput.value = value || "";
       activeInput.dataset.auto = "0";
+    };
+
+    const normalizeAssetCode = (raw) => String(raw || "").trim().toUpperCase();
+
+    const resetScanLookupResult = () => {
+      if (!els.scanLookupResult) return;
+      els.scanLookupResult.hidden = true;
+      els.scanLookupResult.innerHTML = "";
+    };
+
+    const renderScanLookupResult = (asset, scannedCode) => {
+      if (!els.scanLookupResult) return;
+      const normalizedCode = normalizeAssetCode(scannedCode);
+      if (!asset) {
+        els.scanLookupResult.hidden = false;
+        els.scanLookupResult.innerHTML = `
+          <strong>Tidak ditemukan</strong>
+          <div class="scan-lookup-code">${escapeHtml(normalizedCode || "-")}</div>
+          <div class="scan-lookup-meta">ID aset tidak cocok dengan data yang ada.</div>
+        `;
+        return;
+      }
+
+      els.scanLookupResult.hidden = false;
+      els.scanLookupResult.innerHTML = `
+        <strong>Aset ditemukan</strong>
+        <div class="scan-lookup-code">${escapeHtml(asset.asset_code || normalizedCode)}</div>
+        <div class="scan-lookup-meta">${escapeHtml(asset.name || "-")}</div>
+        <div class="scan-lookup-meta">Jenis: ${escapeHtml(asset.asset_type_name || "-")} | Kondisi: ${escapeHtml(asset.condition || asset.asset_condition || "-")}</div>
+        <div class="scan-lookup-meta">Status: ${escapeHtml(asset.loan_status || "Ada")}</div>
+      `;
+    };
+
+    const findAssetByCode = async (scannedCode) => {
+      const normalizedCode = normalizeAssetCode(scannedCode);
+      if (!normalizedCode) return null;
+
+      const localMatch = (state.assets || []).find(
+        (item) => normalizeAssetCode(item.asset_code) === normalizedCode,
+      );
+      if (localMatch) return localMatch;
+
+      const data = await api(`/api/assets/search?q=${encodeURIComponent(normalizedCode)}&limit=30`);
+      const list = Array.isArray(data?.assets) ? data.assets : [];
+      const exact = list.find((item) => normalizeAssetCode(item.asset_code) === normalizedCode);
+      return exact || null;
+    };
+
+    const setScanPurpose = (purpose = "fill") => {
+      scanPurpose = purpose === "lookup" ? "lookup" : "fill";
+      lookupBusy = false;
+      resetScanLookupResult();
+    };
+
+    const handleDetectedValue = async (value) => {
+      const scanned = String(value || "").trim();
+      if (!scanned) return;
+
+      if (scanPurpose !== "lookup") {
+        applyScannedValue(scanned);
+        closeModal();
+        return;
+      }
+
+      if (lookupBusy) return;
+      lookupBusy = true;
+      stopCamera();
+      els.scanStatus.textContent = `Kode terbaca: ${scanned}. Mencari data aset...`;
+
+      try {
+        const asset = await findAssetByCode(scanned);
+        renderScanLookupResult(asset, scanned);
+        if (asset) {
+          els.scanStatus.textContent = "Aset ditemukan. Klik Gunakan Kamera untuk scan lagi.";
+        } else {
+          els.scanStatus.textContent = "ID aset tidak ditemukan. Klik Gunakan Kamera untuk scan ulang.";
+        }
+      } catch (error) {
+        renderScanLookupResult(null, scanned);
+        els.scanStatus.textContent = error?.message || "Gagal mencari data aset.";
+      } finally {
+        lookupBusy = false;
+      }
     };
 
     const applyPhotoFile = (file) => {
@@ -3615,8 +3720,7 @@
           if (results.length > 0) {
             const value = String(results[0].rawValue || "").trim();
             if (value) {
-              applyScannedValue(value);
-              closeModal();
+              await handleDetectedValue(value);
               return;
             }
           }
@@ -3649,16 +3753,18 @@
         return;
       }
 
-      els.scanStatus.textContent = "Arahkan kamera ke barcode.";
+      els.scanStatus.textContent =
+        scanPurpose === "lookup"
+          ? "Arahkan kamera ke QR/Barcode ID aset."
+          : "Arahkan kamera ke barcode.";
 
       const reader = getCodeReader();
       if (reader) {
         const onResult = (result, err) => {
           if (result) {
-            applyScannedValue(String(result.text || "").trim());
-            closeModal();
+            handleDetectedValue(String(result.text || "").trim()).catch(() => {});
           } else if (err && err.name !== "NotFoundException") {
-            els.scanStatus.textContent = "Barcode belum terbaca, arahkan kamera lebih dekat.";
+            els.scanStatus.textContent = "Barcode belum terbaca, sesuaikan jarak kamera (jangan terlalu dekat).";
           }
         };
         try {
@@ -3705,32 +3811,43 @@
       if (!file) return;
       els.scanStatus.textContent = "Memindai foto barcode...";
 
-      // Prioritaskan decode di backend agar tetap jalan meski scanner browser tidak siap.
-      try {
-        const value = await decodeBarcodeFromPhoto(file);
-        if (value) {
-          applyScannedValue(value);
-          closeModal();
-          return;
-        }
-      } catch (_) {
-      }
-
       const url = URL.createObjectURL(file);
       try {
         const img = new Image();
         img.src = url;
         await img.decode();
 
-        const value = await robustDecodeFromSource(
+        // Local decode lebih cepat daripada upload network.
+        let value = await robustDecodeFromSource(
           img,
           img.naturalWidth || img.width,
           img.naturalHeight || img.height,
-          { allowServer: true, serverLimit: 2 },
+          { profile: "fast", allowServer: false },
         );
         if (value) {
-          applyScannedValue(value);
-          closeModal();
+          await handleDetectedValue(value);
+          return;
+        }
+
+        // Fallback backend jika local scanner gagal.
+        try {
+          value = await decodeBarcodeFromPhoto(file);
+          if (value) {
+            await handleDetectedValue(value);
+            return;
+          }
+        } catch (_) {
+        }
+
+        // Percobaan local lebih agresif sebelum gagal total.
+        value = await robustDecodeFromSource(
+          img,
+          img.naturalWidth || img.width,
+          img.naturalHeight || img.height,
+          { profile: "full", allowServer: false },
+        );
+        if (value) {
+          await handleDetectedValue(value);
           return;
         }
 
@@ -3777,8 +3894,7 @@
           { allowServer: true, serverLimit: 2 },
         );
         if (value) {
-          applyScannedValue(value);
-          closeModal();
+          await handleDetectedValue(value);
           return;
         }
 
@@ -3815,6 +3931,7 @@
         const input =
           target === "quick" ? els.quickAssetForm?.barcode : els.assetForm?.barcode;
         if (!input) return;
+        setScanPurpose("fill");
         activeInput = input;
         activePhotoInput = null;
         setMode("barcode");
@@ -3828,12 +3945,22 @@
         const input =
           target === "quick" ? els.quickAssetForm?.photo : els.assetForm?.photo;
         if (!input) return;
+        setScanPurpose("fill");
         activeInput = null;
         activePhotoInput = input;
         setMode("photo");
         showModal();
         startCameraScan();
       });
+    });
+
+    els.mobileScanAsset?.addEventListener("click", () => {
+      setScanPurpose("lookup");
+      activeInput = null;
+      activePhotoInput = null;
+      setMode("barcode");
+      showModal();
+      startCameraScan();
     });
   };
 
