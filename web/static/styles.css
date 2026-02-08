@@ -840,6 +840,21 @@ td .row-actions {
   border-top: 1px dashed var(--gray-300);
 }
 
+.loan-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.loan-split-col {
+  min-width: 0;
+}
+
+.loan-notes-label textarea {
+  min-height: 168px;
+}
+
 .loan-asset-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1012,6 +1027,14 @@ td .row-actions {
 
   .loan-asset-row {
     grid-template-columns: 1fr;
+  }
+
+  .loan-split {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-notes-label textarea {
+    min-height: 120px;
   }
 }
 .modal-backdrop {

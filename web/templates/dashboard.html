@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260208-9">
+  <link rel="stylesheet" href="/static/styles.css?v=20260208-10">
   <link id="favicon-link" rel="icon" href="/static/favicon.svg">
   <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js" defer></script>
 </head>
@@ -434,28 +434,35 @@
             Tanggal Pinjam
             <input type="date" name="borrow_date" required>
           </label>
-          <label class="full-width">
-            Catatan (Opsional)
-            <textarea name="notes" rows="3" placeholder="Keterangan tambahan"></textarea>
-          </label>
 
-          <div class="full-width loan-divider">
-            <strong>Daftar Aset Dipinjam</strong>
-            <span class="muted small">Tambah lebih dari satu aset</span>
-          </div>
-
-          <label class="full-width">
-            Cari Aset
-            <div class="loan-asset-row">
-              <div class="search-select">
-                <input type="text" name="asset_search" id="loan-asset-search" placeholder="Ketik kode atau nama aset" autocomplete="off">
-                <div class="search-results" id="loan-asset-results" role="listbox" aria-label="Daftar aset"></div>
+          <div class="full-width loan-split">
+            <div class="loan-split-col">
+              <div class="loan-divider">
+                <strong>Daftar Aset Dipinjam</strong>
+                <span class="muted small">Tambah lebih dari satu aset</span>
               </div>
-              <button type="button" class="btn btn-outline" id="loan-add-asset">Tambah</button>
-            </div>
-          </label>
 
-          <div class="full-width selected-assets" id="loan-selected-assets"></div>
+              <label>
+                Cari Aset
+                <div class="loan-asset-row">
+                  <div class="search-select">
+                    <input type="text" name="asset_search" id="loan-asset-search" placeholder="Ketik kode atau nama aset" autocomplete="off">
+                    <div class="search-results" id="loan-asset-results" role="listbox" aria-label="Daftar aset"></div>
+                  </div>
+                  <button type="button" class="btn btn-outline" id="loan-add-asset">Tambah</button>
+                </div>
+              </label>
+
+              <div class="selected-assets" id="loan-selected-assets"></div>
+            </div>
+
+            <div class="loan-split-col">
+              <label class="loan-notes-label">
+                Catatan (Opsional)
+                <textarea name="notes" rows="2" placeholder="Keterangan tambahan"></textarea>
+              </label>
+            </div>
+          </div>
 
           <div class="inline-actions full-width">
             <button type="submit" class="btn btn-primary" id="loan-submit">Simpan Peminjaman</button>
