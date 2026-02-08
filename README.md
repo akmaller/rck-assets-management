@@ -278,6 +278,95 @@ Command reload Nginx aaPanel:
 /www/server/nginx/sbin/nginx -s reload
 ```
 
+## Update Aplikasi di Server Ubuntu 22 (via Git)
+
+Panduan ini untuk server yang sudah pernah dideploy sebelumnya.
+
+### 1) Masuk ke folder project
+
+```bash
+cd /www/wwwroot/rck-assets-management
+```
+
+### 2) Backup cepat sebelum update
+
+```bash
+sudo mkdir -p /www/backup/rck-assets
+sudo cp -a rck-assets /www/backup/rck-assets/rck-assets-bin-$(date +%F-%H%M%S) 2>/dev/null || true
+sudo cp -a data/rck_assets.db /www/backup/rck-assets/rck_assets-$(date +%F-%H%M%S).db 2>/dev/null || true
+```
+
+### 3) Tarik perubahan terbaru dari Git
+
+```bash
+git fetch origin
+git status --short
+git pull --ff-only origin main
+```
+
+Jika branch deploy bukan `main`, ganti nama branch sesuai branch deploy Anda.
+
+Jika muncul konflik karena ada perubahan lokal:
+
+```bash
+git stash push -u -m "pre-update-$(date +%F-%H%M%S)"
+git pull --ff-only origin main
+```
+
+### 4) Build binary terbaru
+
+```bash
+go version
+go build -buildvcs=false -o rck-assets ./cmd/server
+```
+
+### 5) Set permission binary sesuai user service
+
+Contoh jika service berjalan sebagai user `www`:
+
+```bash
+sudo chown www:www rck-assets
+sudo chmod +x rck-assets
+```
+
+Catatan: sesuaikan user/group dengan isi `User=` dan `Group=` di `/etc/systemd/system/rck-assets.service`.
+
+### 6) Restart service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rck-assets
+sudo systemctl status rck-assets --no-pager -l
+sudo journalctl -u rck-assets -n 80 --no-pager
+```
+
+### 7) Verifikasi aplikasi
+
+```bash
+curl -sS http://127.0.0.1:8080/api/health
+```
+
+Jika `HTTP_ADDR` Anda bukan `:8080`, sesuaikan port.
+
+Jika memakai aaPanel Nginx:
+
+```bash
+/www/server/nginx/sbin/nginx -t
+/www/server/nginx/sbin/nginx -s reload
+```
+
+### 8) Rollback cepat jika update gagal
+
+```bash
+cd /www/wwwroot/rck-assets-management
+sudo cp -a /www/backup/rck-assets/rck-assets-bin-YYYY-MM-DD-HHMMSS ./rck-assets
+sudo chmod +x rck-assets
+sudo chown www:www rck-assets
+sudo systemctl restart rck-assets
+```
+
+Ganti `YYYY-MM-DD-HHMMSS` dengan nama file backup yang benar.
+
 ## Endpoint API dan Akses
 
 Public:
