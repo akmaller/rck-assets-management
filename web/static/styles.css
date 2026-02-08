@@ -141,6 +141,7 @@ label {
   gap: 0.35rem;
   font-size: 0.94rem;
   color: var(--gray-700);
+  min-width: 0;
 }
 
 .label-optional {
@@ -279,6 +280,13 @@ select {
   font: inherit;
   background: var(--white);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-width: 0;
+}
+
+input[type="date"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 input:focus,
