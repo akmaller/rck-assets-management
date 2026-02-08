@@ -1181,6 +1181,101 @@ func (h *Handler) ExportAssetsCSV(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 	}
 }
 
+func (h *Handler) ExportAssetTypesCSV(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+	types, err := h.store.ListAssetTypes()
+	if err != nil {
+		writeError(w, stdhttp.StatusInternalServerError, "gagal mengambil daftar jenis aset")
+		return
+	}
+
+	filename := fmt.Sprintf("rck-asset-types-%s.csv", time.Now().Format("20060102-150405"))
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{"ID", "Nama Jenis", "Keterangan", "Jumlah Aset", "Created At"})
+	for _, item := range types {
+		_ = writer.Write([]string{
+			strconv.FormatInt(item.ID, 10),
+			item.Name,
+			item.Description,
+			strconv.FormatInt(item.AssetCount, 10),
+			item.CreatedAt.Format(time.RFC3339),
+		})
+	}
+}
+
+func (h *Handler) ExportLoansCSV(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+	loans, err := h.store.ListLoans()
+	if err != nil {
+		writeError(w, stdhttp.StatusInternalServerError, "gagal mengambil daftar peminjaman")
+		return
+	}
+
+	filename := fmt.Sprintf("rck-loans-%s.csv", time.Now().Format("20060102-150405"))
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{
+		"Loan ID",
+		"Nama Peminjam",
+		"Kontak",
+		"Tanggal Pinjam",
+		"Kode Aset",
+		"Nama Aset",
+		"Tanggal Kembali",
+		"Status",
+		"Catatan",
+		"Created At",
+		"Updated At",
+	})
+
+	for _, loan := range loans {
+		if len(loan.Items) == 0 {
+			_ = writer.Write([]string{
+				strconv.FormatInt(loan.ID, 10),
+				loan.BorrowerName,
+				loan.BorrowerContact,
+				loan.BorrowDate,
+				"",
+				"",
+				"",
+				"-",
+				loan.Notes,
+				loan.CreatedAt.Format(time.RFC3339),
+				loan.UpdatedAt.Format(time.RFC3339),
+			})
+			continue
+		}
+
+		for _, item := range loan.Items {
+			returnDate := strings.TrimSpace(item.ReturnDate)
+			status := "Dipinjam"
+			if returnDate != "" {
+				status = "Dikembalikan"
+			}
+			_ = writer.Write([]string{
+				strconv.FormatInt(loan.ID, 10),
+				loan.BorrowerName,
+				loan.BorrowerContact,
+				loan.BorrowDate,
+				item.AssetCode,
+				item.AssetName,
+				returnDate,
+				status,
+				loan.Notes,
+				loan.CreatedAt.Format(time.RFC3339),
+				loan.UpdatedAt.Format(time.RFC3339),
+			})
+		}
+	}
+}
+
 func (h *Handler) ListLoans(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	limit := 20
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {

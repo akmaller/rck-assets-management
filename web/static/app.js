@@ -106,6 +106,8 @@
     loanAddAsset: document.getElementById("loan-add-asset"),
     loanSelectedAssets: document.getElementById("loan-selected-assets"),
     exportAssets: document.getElementById("export-assets"),
+    exportTypes: document.getElementById("export-types"),
+    exportLoans: document.getElementById("export-loans"),
     scanModal: document.getElementById("scan-modal"),
     scanVideo: document.getElementById("scan-video"),
     scanClose: document.getElementById("scan-close"),
@@ -1674,10 +1676,21 @@
   };
 
   const setupExport = () => {
-    if (!els.exportAssets) return;
-    els.exportAssets.addEventListener("click", () => {
-      window.location.href = "/api/assets/export.csv";
-    });
+    if (els.exportAssets) {
+      els.exportAssets.addEventListener("click", () => {
+        window.location.href = "/api/assets/export.csv";
+      });
+    }
+    if (els.exportTypes) {
+      els.exportTypes.addEventListener("click", () => {
+        window.location.href = "/api/asset-types/export.csv";
+      });
+    }
+    if (els.exportLoans) {
+      els.exportLoans.addEventListener("click", () => {
+        window.location.href = "/api/loans/export.csv";
+      });
+    }
   };
 
   const setupSSE = () => {

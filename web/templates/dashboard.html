@@ -281,6 +281,9 @@
       <section id="section-types" class="panel" data-section="types">
         <h3>Manajemen Jenis Aset</h3>
         <p class="muted">Tambahkan kategori/jenis aset agar konsisten pada input.</p>
+        <div class="section-actions">
+          <button type="button" class="btn btn-outline" id="export-types">Export CSV</button>
+        </div>
 
         <form id="type-form" class="form-grid" novalidate>
           <input type="hidden" name="id">
@@ -425,6 +428,7 @@
         <h3>Peminjaman Aset</h3>
         <p class="muted">Catat aset yang dipinjam oleh pihak lain.</p>
         <div class="section-actions">
+          <button type="button" class="btn btn-outline" id="export-loans">Export CSV</button>
           <button type="button" class="btn btn-outline" id="loan-filter-toggle">Filter</button>
         </div>
 
@@ -566,6 +570,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-14" defer></script>
+  <script src="/static/app.js?v=20260208-15" defer></script>
 </body>
 </html>

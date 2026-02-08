@@ -37,6 +37,7 @@ func NewRouter(handler *Handler) stdhttp.Handler {
 			secure.Get("/asset-types", handler.ListAssetTypes)
 			secure.Post("/asset-types", handler.CreateAssetType)
 			secure.Put("/asset-types/{id}", handler.UpdateAssetType)
+			secure.Get("/asset-types/export.csv", handler.ExportAssetTypesCSV)
 
 			secure.Get("/assets", handler.ListAssets)
 			secure.Get("/assets/search", handler.SearchAssets)
@@ -49,6 +50,7 @@ func NewRouter(handler *Handler) stdhttp.Handler {
 			secure.Delete("/assets/{id}", handler.DeleteAsset)
 
 			secure.Get("/loans", handler.ListLoans)
+			secure.Get("/loans/export.csv", handler.ExportLoansCSV)
 			secure.Post("/loans", handler.CreateLoan)
 			secure.Put("/loans/{id}", handler.UpdateLoan)
 			secure.Post("/loans/{id}/items/{itemId}/return", handler.ReturnLoan)
