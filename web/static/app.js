@@ -374,6 +374,342 @@
     window.addEventListener("orientationchange", queueMenuIndicatorSync);
   };
 
+  const CUSTOM_SELECT_MOBILE_BP = 980;
+  const CUSTOM_SELECT_ANIM_MS = 180;
+  const customSelectState = {
+    instances: new Map(),
+    activeDesktop: null,
+    listenersBound: false,
+    mobileOpen: false,
+    mobileInstance: null,
+    backdrop: null,
+    sheet: null,
+    title: null,
+    list: null,
+    close: null,
+  };
+
+  const isMobileSelectMode = () => window.innerWidth <= CUSTOM_SELECT_MOBILE_BP;
+
+  const getSelectLabelText = (select) => {
+    if (!(select instanceof HTMLSelectElement)) return "Pilih Opsi";
+    const label = select.closest("label");
+    if (!label) return "Pilih Opsi";
+    const textNode = Array.from(label.childNodes).find(
+      (node) => node.nodeType === Node.TEXT_NODE && String(node.textContent || "").trim() !== "",
+    );
+    const text = String(textNode?.textContent || "").trim();
+    return text || "Pilih Opsi";
+  };
+
+  const getSelectedOptionText = (select) => {
+    if (!(select instanceof HTMLSelectElement)) return "Pilih Opsi";
+    const opt = select.options?.[select.selectedIndex];
+    if (!opt) return "Pilih Opsi";
+    return String(opt.textContent || opt.label || "Pilih Opsi").trim();
+  };
+
+  const closeDesktopSelect = (instance = customSelectState.activeDesktop) => {
+    if (!instance) return;
+    instance.wrapper.classList.remove("open");
+    instance.trigger.setAttribute("aria-expanded", "false");
+    if (customSelectState.activeDesktop === instance) {
+      customSelectState.activeDesktop = null;
+    }
+  };
+
+  const syncCustomSelectTrigger = (instance) => {
+    const selectedText = getSelectedOptionText(instance.select);
+    instance.trigger.textContent = selectedText;
+    instance.trigger.classList.toggle("placeholder", instance.select.value === "");
+    instance.trigger.disabled = Boolean(instance.select.disabled);
+  };
+
+  const applyCustomSelectValue = (instance, value) => {
+    if (instance.select.disabled) return;
+    const nextValue = String(value ?? "");
+    if (instance.select.value !== nextValue) {
+      instance.select.value = nextValue;
+      instance.select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    syncCustomSelectTrigger(instance);
+    renderDesktopSelectOptions(instance);
+  };
+
+  const createCustomSelectOption = (instance, option, mode = "desktop") => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "custom-select-option";
+    button.textContent = String(option.textContent || option.label || option.value || "").trim();
+    button.dataset.value = option.value;
+    button.disabled = Boolean(option.disabled);
+    if (option.value === instance.select.value) {
+      button.classList.add("selected");
+    }
+    if (option.value === "") {
+      button.classList.add("placeholder");
+    }
+    button.addEventListener("click", () => {
+      applyCustomSelectValue(instance, option.value);
+      if (mode === "mobile") {
+        closeMobileSelect();
+      } else {
+        closeDesktopSelect(instance);
+      }
+    });
+    return button;
+  };
+
+  const renderDesktopSelectOptions = (instance) => {
+    instance.menu.innerHTML = "";
+    const options = Array.from(instance.select.options || []);
+    options.forEach((option) => {
+      instance.menu.appendChild(createCustomSelectOption(instance, option, "desktop"));
+    });
+  };
+
+  const openDesktopSelect = (instance) => {
+    if (instance.select.disabled) return;
+    if (customSelectState.activeDesktop && customSelectState.activeDesktop !== instance) {
+      closeDesktopSelect(customSelectState.activeDesktop);
+    }
+    instance.wrapper.classList.add("open");
+    instance.trigger.setAttribute("aria-expanded", "true");
+    customSelectState.activeDesktop = instance;
+  };
+
+  const ensureMobileSelectUI = () => {
+    if (customSelectState.backdrop && customSelectState.sheet) {
+      return;
+    }
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "select-mobile-backdrop";
+    backdrop.hidden = true;
+
+    const sheet = document.createElement("div");
+    sheet.className = "select-mobile-sheet";
+    sheet.hidden = true;
+
+    const card = document.createElement("div");
+    card.className = "select-mobile-card";
+
+    const header = document.createElement("div");
+    header.className = "select-mobile-header";
+
+    const title = document.createElement("strong");
+    title.className = "select-mobile-title";
+    title.textContent = "Pilih Opsi";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "icon-btn select-mobile-close";
+    closeBtn.setAttribute("aria-label", "Tutup pilihan");
+    closeBtn.innerHTML = "<span></span><span></span>";
+
+    const list = document.createElement("div");
+    list.className = "select-mobile-list";
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    card.appendChild(header);
+    card.appendChild(list);
+    sheet.appendChild(card);
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(sheet);
+
+    customSelectState.backdrop = backdrop;
+    customSelectState.sheet = sheet;
+    customSelectState.title = title;
+    customSelectState.list = list;
+    customSelectState.close = closeBtn;
+
+    backdrop.addEventListener("click", () => closeMobileSelect());
+    closeBtn.addEventListener("click", () => closeMobileSelect());
+    sheet.addEventListener("click", (event) => {
+      if (event.target === sheet) {
+        closeMobileSelect();
+      }
+    });
+  };
+
+  const closeMobileSelect = () => {
+    if (!customSelectState.mobileOpen || !customSelectState.sheet || !customSelectState.backdrop) return;
+    customSelectState.mobileOpen = false;
+    customSelectState.mobileInstance = null;
+    customSelectState.sheet.classList.remove("show");
+    customSelectState.backdrop.classList.remove("show");
+    document.body.classList.remove("select-mobile-open");
+    setTimeout(() => {
+      if (customSelectState.mobileOpen) return;
+      customSelectState.sheet.hidden = true;
+      customSelectState.backdrop.hidden = true;
+      if (customSelectState.list) {
+        customSelectState.list.innerHTML = "";
+      }
+    }, CUSTOM_SELECT_ANIM_MS);
+  };
+
+  const openMobileSelect = (instance) => {
+    if (instance.select.disabled) return;
+    ensureMobileSelectUI();
+    if (!customSelectState.sheet || !customSelectState.backdrop || !customSelectState.list || !customSelectState.title) return;
+
+    customSelectState.mobileInstance = instance;
+    customSelectState.mobileOpen = true;
+    customSelectState.title.textContent = getSelectLabelText(instance.select);
+    customSelectState.list.innerHTML = "";
+
+    const options = Array.from(instance.select.options || []);
+    options.forEach((option) => {
+      customSelectState.list.appendChild(createCustomSelectOption(instance, option, "mobile"));
+    });
+
+    customSelectState.backdrop.hidden = false;
+    customSelectState.sheet.hidden = false;
+    document.body.classList.add("select-mobile-open");
+    requestAnimationFrame(() => {
+      customSelectState.backdrop?.classList.add("show");
+      customSelectState.sheet?.classList.add("show");
+    });
+  };
+
+  const ensureCustomSelectInstance = (select) => {
+    if (!(select instanceof HTMLSelectElement)) return null;
+    if (customSelectState.instances.has(select)) {
+      return customSelectState.instances.get(select);
+    }
+    if (select.closest(".custom-select")) {
+      return null;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "custom-select";
+    select.parentNode?.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+    select.classList.add("custom-select-native");
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "custom-select-trigger";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", "false");
+
+    const menu = document.createElement("div");
+    menu.className = "custom-select-menu";
+    menu.setAttribute("role", "listbox");
+
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(menu);
+
+    const instance = {
+      select,
+      wrapper,
+      trigger,
+      menu,
+    };
+
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (isMobileSelectMode()) {
+        closeDesktopSelect();
+        openMobileSelect(instance);
+        return;
+      }
+      if (instance.wrapper.classList.contains("open")) {
+        closeDesktopSelect(instance);
+        return;
+      }
+      openDesktopSelect(instance);
+    });
+
+    select.addEventListener("change", () => {
+      syncCustomSelectTrigger(instance);
+      renderDesktopSelectOptions(instance);
+    });
+
+    customSelectState.instances.set(select, instance);
+    syncCustomSelectTrigger(instance);
+    renderDesktopSelectOptions(instance);
+    return instance;
+  };
+
+  const refreshCustomSelects = () => {
+    const allSelects = Array.from(document.querySelectorAll("select"));
+    allSelects.forEach((select) => {
+      ensureCustomSelectInstance(select);
+    });
+
+    for (const [select, instance] of customSelectState.instances.entries()) {
+      if (!select.isConnected) {
+        closeDesktopSelect(instance);
+        customSelectState.instances.delete(select);
+        continue;
+      }
+      syncCustomSelectTrigger(instance);
+      renderDesktopSelectOptions(instance);
+    }
+  };
+
+  const queueCustomSelectRefresh = () => {
+    requestAnimationFrame(() => {
+      refreshCustomSelects();
+    });
+  };
+
+  const setupCustomSelects = () => {
+    refreshCustomSelects();
+    if (customSelectState.listenersBound) return;
+
+    document.addEventListener("click", (event) => {
+      if (!customSelectState.activeDesktop) return;
+      const active = customSelectState.activeDesktop;
+      if (!active.wrapper.contains(event.target)) {
+        closeDesktopSelect(active);
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (customSelectState.mobileOpen) {
+        closeMobileSelect();
+        return;
+      }
+      closeDesktopSelect();
+    });
+
+    window.addEventListener("resize", () => {
+      if (isMobileSelectMode()) {
+        closeDesktopSelect();
+      } else if (customSelectState.mobileOpen) {
+        closeMobileSelect();
+      }
+      queueCustomSelectRefresh();
+    });
+
+    window.addEventListener("orientationchange", () => {
+      closeDesktopSelect();
+      if (customSelectState.mobileOpen) {
+        closeMobileSelect();
+      }
+      queueCustomSelectRefresh();
+    });
+
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (customSelectState.activeDesktop) {
+          closeDesktopSelect(customSelectState.activeDesktop);
+        }
+      },
+      { passive: true, capture: true },
+    );
+
+    customSelectState.listenersBound = true;
+  };
+
   const activateSection = (name) => {
     const links = Array.from(document.querySelectorAll(".menu-link"));
     links.forEach((link) => link.classList.toggle("active", link.dataset.section === name));
@@ -512,6 +848,7 @@
     setElementVisible(els.exportLoans, admin);
     setElementVisible(els.importLoans, admin);
     queueMenuIndicatorSync();
+    queueCustomSelectRefresh();
   };
 
   const loadMe = async () => {
@@ -1264,6 +1601,7 @@
         select.value = current;
       }
     });
+    queueCustomSelectRefresh();
   };
 
   const renderLoanAssetResults = (items = null) => {
@@ -1354,6 +1692,7 @@
     els.userForm.role.value = "staff";
     els.userForm.is_active.checked = true;
     document.getElementById("user-submit").textContent = "Simpan User";
+    queueCustomSelectRefresh();
   };
 
   const resetTypeForm = () => {
@@ -1422,6 +1761,7 @@
         els.userForm.role.value = user.role;
         els.userForm.is_active.checked = Boolean(user.is_active);
         document.getElementById("user-submit").textContent = "Update User";
+        queueCustomSelectRefresh();
         activateSection("users");
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
@@ -1669,6 +2009,7 @@
       requestNextAssetCode(els.assetForm.purchase_date.value, els.assetForm.asset_code);
     }
     document.getElementById("asset-submit").textContent = "Simpan Aset";
+    queueCustomSelectRefresh();
   };
 
   const setupAssets = () => {
@@ -1762,6 +2103,7 @@
         els.assetForm.barcode.value = asset.barcode;
         els.assetForm.photo.value = "";
         document.getElementById("asset-submit").textContent = "Update Aset";
+        queueCustomSelectRefresh();
         showForm();
         activateSection("assets");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2162,6 +2504,7 @@
     els.assetFilterReset?.addEventListener("click", () => {
       els.assetFilter.reset();
       state.assetFilter = { date_from: "", date_to: "", type_id: "", condition: "" };
+      queueCustomSelectRefresh();
       state.assetPage = 1;
       loadAssets().catch((error) => {
         setFlash(error.message, "error");
@@ -2324,6 +2667,7 @@
           }
           requestNextAssetCode(els.quickAssetForm.purchase_date.value, els.quickAssetForm.asset_code);
         }
+        queueCustomSelectRefresh();
         await loadAssets();
       } catch (error) {
         setFlash(error.message, "error");
@@ -2894,6 +3238,7 @@
         setupDrawer();
         setupMenu();
         setupMenuIndicator();
+        setupCustomSelects();
         setupScrollSpy();
         setupMobileAdd();
         setupLogout();
