@@ -94,6 +94,11 @@
     assetPhotoClose: document.getElementById("asset-photo-close"),
     loanForm: document.getElementById("loan-form"),
     loanCancel: document.getElementById("loan-cancel"),
+    loanCreateBtn: document.getElementById("loan-create-btn"),
+    loanModal: document.getElementById("loan-modal"),
+    loanBackdrop: document.getElementById("loan-backdrop"),
+    loanClose: document.getElementById("loan-close"),
+    loanModalTitle: document.getElementById("loan-modal-title"),
     loansTable: document.getElementById("loans-table"),
     loanFilter: document.getElementById("loan-filter"),
     loanFilterReset: document.getElementById("loan-filter-reset"),
@@ -1391,15 +1396,66 @@
     selectedLoanAssets = [];
     selectedLoanCandidate = null;
     if (els.loanAssetSearch) els.loanAssetSearch.value = "";
+    if (els.loanAssetResults) els.loanAssetResults.classList.remove("active");
     renderSelectedLoanAssets();
     if (els.loanForm.borrow_date && !els.loanForm.borrow_date.value) {
       els.loanForm.borrow_date.value = todayISO();
     }
     document.getElementById("loan-submit").textContent = "Simpan Peminjaman";
+    if (els.loanModalTitle) {
+      els.loanModalTitle.textContent = "Buat Pinjaman";
+    }
   };
 
   const setupLoans = () => {
     if (!els.loanForm || !els.loansTable) return;
+
+    const LOAN_MODAL_ANIM_MS = 180;
+    const openLoanModal = (title = "Buat Pinjaman") => {
+      if (!els.loanModal || !els.loanBackdrop) return;
+      if (els.loanModalTitle) {
+        els.loanModalTitle.textContent = title;
+      }
+      els.loanModal.hidden = false;
+      els.loanBackdrop.hidden = false;
+      requestAnimationFrame(() => {
+        els.loanModal.classList.add("show");
+        els.loanBackdrop.classList.add("show");
+      });
+    };
+
+    const closeLoanModal = () => {
+      if (!els.loanModal || !els.loanBackdrop) return;
+      els.loanModal.classList.remove("show");
+      els.loanBackdrop.classList.remove("show");
+      setTimeout(() => {
+        els.loanModal.hidden = true;
+        els.loanBackdrop.hidden = true;
+      }, LOAN_MODAL_ANIM_MS);
+    };
+
+    const cancelLoanForm = () => {
+      resetLoanForm();
+      closeLoanModal();
+    };
+
+    els.loanCreateBtn?.addEventListener("click", () => {
+      resetLoanForm();
+      openLoanModal("Buat Pinjaman");
+    });
+
+    els.loanClose?.addEventListener("click", cancelLoanForm);
+    els.loanBackdrop?.addEventListener("click", cancelLoanForm);
+    els.loanModal?.addEventListener("click", (event) => {
+      if (event.target === els.loanModal) {
+        cancelLoanForm();
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.loanModal && !els.loanModal.hidden) {
+        cancelLoanForm();
+      }
+    });
 
     els.loanForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -1423,13 +1479,14 @@
         const data = await api(endpoint, { method, body: JSON.stringify(payload) });
         setFlash(data.message || "Peminjaman tersimpan.", "success");
         resetLoanForm();
+        closeLoanModal();
         await loadLoans();
       } catch (error) {
         setFlash(error.message, "error");
       }
     });
 
-    els.loanCancel?.addEventListener("click", resetLoanForm);
+    els.loanCancel?.addEventListener("click", cancelLoanForm);
 
     els.loansTable.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-action]");
@@ -1453,8 +1510,11 @@
         els.loanForm.borrow_date.value = loan.borrow_date;
         els.loanForm.notes.value = loan.notes || "";
         document.getElementById("loan-submit").textContent = "Update Peminjaman";
+        if (els.loanModalTitle) {
+          els.loanModalTitle.textContent = "Edit Pinjaman";
+        }
+        openLoanModal("Edit Pinjaman");
         activateSection("loans");
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
 

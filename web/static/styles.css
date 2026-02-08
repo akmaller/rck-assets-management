@@ -1217,6 +1217,38 @@ td .row-actions {
   transition: width 0.18s ease;
 }
 
+.loan-modal {
+  z-index: 65;
+}
+
+#loan-backdrop {
+  z-index: 64;
+}
+
+.loan-modal-card {
+  width: min(980px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.loan-close {
+  width: 34px;
+  height: 34px;
+}
+
+.loan-close span {
+  width: 16px;
+}
+
+.loan-close span:first-child {
+  transform: rotate(45deg);
+}
+
+.loan-close span:last-child {
+  transform: rotate(-45deg);
+  margin-top: -7px;
+}
+
 @media (max-width: 980px) {
   .asset-photo-card {
     width: min(94vw, 720px);
@@ -1225,5 +1257,10 @@ td .row-actions {
 
   .asset-photo-preview {
     max-height: calc(85vh - 56px);
+  }
+
+  .loan-modal-card {
+    width: min(96vw, 760px);
+    max-height: 90vh;
   }
 }

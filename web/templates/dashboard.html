@@ -433,57 +433,8 @@
           <button type="button" class="btn btn-outline" id="export-loans">Export CSV</button>
           <button type="button" class="btn btn-outline" id="import-loans">Import CSV</button>
           <button type="button" class="btn btn-outline" id="loan-filter-toggle">Filter</button>
+          <button type="button" class="btn btn-primary" id="loan-create-btn">Buat Pinjaman</button>
         </div>
-
-        <form id="loan-form" class="form-grid" novalidate>
-          <input type="hidden" name="id">
-          <label>
-            Nama Peminjam
-            <input type="text" name="borrower_name" required>
-          </label>
-          <label>
-            Kontak Peminjam (Opsional)
-            <input type="text" name="borrower_contact" placeholder="Telepon / Email">
-          </label>
-          <label>
-            Tanggal Pinjam
-            <input type="date" name="borrow_date" required>
-          </label>
-
-          <div class="full-width loan-split">
-            <div class="loan-split-col">
-              <div class="loan-divider">
-                <strong>Daftar Aset Dipinjam</strong>
-                <span class="muted small">Tambah lebih dari satu aset</span>
-              </div>
-
-              <label>
-                Cari Aset
-                <div class="loan-asset-row">
-                  <div class="search-select">
-                    <input type="text" name="asset_search" id="loan-asset-search" placeholder="Ketik kode atau nama aset" autocomplete="off">
-                    <div class="search-results" id="loan-asset-results" role="listbox" aria-label="Daftar aset"></div>
-                  </div>
-                  <button type="button" class="btn btn-outline" id="loan-add-asset">Tambah</button>
-                </div>
-              </label>
-
-              <div class="selected-assets" id="loan-selected-assets"></div>
-            </div>
-
-            <div class="loan-split-col">
-              <label class="loan-notes-label">
-                Catatan (Opsional)
-                <textarea name="notes" rows="2" placeholder="Keterangan tambahan"></textarea>
-              </label>
-            </div>
-          </div>
-
-          <div class="inline-actions full-width">
-            <button type="submit" class="btn btn-primary" id="loan-submit">Simpan Peminjaman</button>
-            <button type="button" class="btn btn-outline" id="loan-cancel">Batal Edit</button>
-          </div>
-        </form>
 
         <form id="loan-filter" class="form-grid compact-grid filter-panel" novalidate>
           <label>
@@ -583,6 +534,70 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="loan-backdrop" hidden></div>
+  <div class="modal loan-modal" id="loan-modal" role="dialog" aria-modal="true" aria-labelledby="loan-modal-title" hidden>
+    <div class="modal-card loan-modal-card">
+      <div class="modal-header">
+        <strong id="loan-modal-title">Buat Pinjaman</strong>
+        <button type="button" class="icon-btn loan-close" id="loan-close" aria-label="Tutup form peminjaman">
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="loan-form" class="form-grid" novalidate>
+          <input type="hidden" name="id">
+          <label>
+            Nama Peminjam
+            <input type="text" name="borrower_name" required>
+          </label>
+          <label>
+            Kontak Peminjam (Opsional)
+            <input type="text" name="borrower_contact" placeholder="Telepon / Email">
+          </label>
+          <label>
+            Tanggal Pinjam
+            <input type="date" name="borrow_date" required>
+          </label>
+
+          <div class="full-width loan-split">
+            <div class="loan-split-col">
+              <div class="loan-divider">
+                <strong>Daftar Aset Dipinjam</strong>
+                <span class="muted small">Tambah lebih dari satu aset</span>
+              </div>
+
+              <label>
+                Cari Aset
+                <div class="loan-asset-row">
+                  <div class="search-select">
+                    <input type="text" name="asset_search" id="loan-asset-search" placeholder="Ketik kode atau nama aset" autocomplete="off">
+                    <div class="search-results" id="loan-asset-results" role="listbox" aria-label="Daftar aset"></div>
+                  </div>
+                  <button type="button" class="btn btn-outline" id="loan-add-asset">Tambah</button>
+                </div>
+              </label>
+
+              <div class="selected-assets" id="loan-selected-assets"></div>
+            </div>
+
+            <div class="loan-split-col">
+              <label class="loan-notes-label">
+                Catatan (Opsional)
+                <textarea name="notes" rows="2" placeholder="Keterangan tambahan"></textarea>
+              </label>
+            </div>
+          </div>
+
+          <div class="inline-actions full-width">
+            <button type="submit" class="btn btn-primary" id="loan-submit">Simpan Peminjaman</button>
+            <button type="button" class="btn btn-outline" id="loan-cancel">Batal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <div class="scan-modal" id="scan-modal" aria-hidden="true">
     <div class="scan-card">
       <div class="scan-header">
@@ -602,6 +617,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260208-16" defer></script>
+  <script src="/static/app.js?v=20260208-17" defer></script>
 </body>
 </html>
