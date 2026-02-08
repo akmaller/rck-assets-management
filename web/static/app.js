@@ -699,10 +699,14 @@
 
     window.addEventListener(
       "scroll",
-      () => {
-        if (customSelectState.activeDesktop) {
-          closeDesktopSelect(customSelectState.activeDesktop);
+      (event) => {
+        const active = customSelectState.activeDesktop;
+        if (!active) return;
+        const target = event.target;
+        if (target instanceof Node && active.wrapper.contains(target)) {
+          return;
         }
+        closeDesktopSelect(active);
       },
       { passive: true, capture: true },
     );
