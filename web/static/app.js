@@ -2058,10 +2058,11 @@
             </td>
             <td>
               <div class="row-actions">
-                <button class="tiny-btn icon" data-action="print-asset" data-id="${asset.id}" aria-label="Cetak label aset" title="Cetak">
+                <button class="tiny-btn icon" data-action="print-asset" data-id="${asset.id}" aria-label="Unduh label aset" title="Unduh">
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 9V3h12v6M6 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1"/>
-                    <path d="M6 17h12v4H6z"/>
+                    <path d="M12 3v11"/>
+                    <path d="M8 10.5 12 14.5 16 10.5"/>
+                    <path d="M5 19h14"/>
                   </svg>
                 </button>
                 <button class="tiny-btn icon" data-action="edit-asset" data-id="${asset.id}" aria-label="Edit aset" title="Edit">
