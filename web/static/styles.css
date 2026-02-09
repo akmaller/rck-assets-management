@@ -197,7 +197,7 @@ label {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 60;
+  z-index: 72;
   padding: 1rem;
   opacity: 0;
   visibility: hidden;
@@ -1318,7 +1318,7 @@ td .row-actions {
 
 .loan-asset-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 0.6rem;
   align-items: center;
 }

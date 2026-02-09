@@ -129,6 +129,7 @@
     loanPageLabel: document.getElementById("loan-page"),
     loanAssetSearch: document.getElementById("loan-asset-search"),
     loanAssetResults: document.getElementById("loan-asset-results"),
+    loanScanAsset: document.getElementById("loan-scan-asset"),
     loanAddAsset: document.getElementById("loan-add-asset"),
     loanSelectedAssets: document.getElementById("loan-selected-assets"),
     exportAssets: document.getElementById("export-assets"),
@@ -3193,6 +3194,8 @@
     let assistAttempt = 0;
     let scanPurpose = "fill";
     let lookupBusy = false;
+    let lastScanValue = "";
+    let lastScanAt = 0;
 
     const isLocalHost =
       location.hostname === "localhost" ||
@@ -3556,7 +3559,13 @@
         if (mode === "photo") {
           els.scanTitle.textContent = "Ambil Foto Aset";
         } else {
-          els.scanTitle.textContent = scanPurpose === "lookup" ? "Scan ID Aset" : "Scan Barcode";
+          if (scanPurpose === "lookup") {
+            els.scanTitle.textContent = "Scan ID Aset";
+          } else if (scanPurpose === "loan") {
+            els.scanTitle.textContent = "Scan Aset Pinjaman";
+          } else {
+            els.scanTitle.textContent = "Scan Barcode";
+          }
         }
       }
       if (els.scanUseCamera) {
@@ -3570,7 +3579,9 @@
           ? "Klik Gunakan Kamera lalu Ambil Gambar, atau pilih file."
           : scanPurpose === "lookup"
             ? "Arahkan kamera ke QR/Barcode ID aset."
-            : "Pilih kamera atau upload foto barcode.";
+            : scanPurpose === "loan"
+              ? "Arahkan kamera ke QR/Barcode ID aset yang dipinjam."
+              : "Pilih kamera atau upload foto barcode.";
       setCaptureButton(false);
     };
 
@@ -3624,6 +3635,18 @@
 
     const normalizeAssetCode = (raw) => String(raw || "").trim().toUpperCase();
 
+    const isDuplicateRecentScan = (raw) => {
+      const value = String(raw || "").trim();
+      if (!value) return false;
+      const now = Date.now();
+      if (value === lastScanValue && now - lastScanAt < 1400) {
+        return true;
+      }
+      lastScanValue = value;
+      lastScanAt = now;
+      return false;
+    };
+
     const resetScanLookupResult = () => {
       if (!els.scanLookupResult) return;
       els.scanLookupResult.hidden = true;
@@ -3669,16 +3692,64 @@
     };
 
     const setScanPurpose = (purpose = "fill") => {
-      scanPurpose = purpose === "lookup" ? "lookup" : "fill";
+      scanPurpose =
+        purpose === "lookup" || purpose === "loan"
+          ? purpose
+          : "fill";
       lookupBusy = false;
+      lastScanValue = "";
+      lastScanAt = 0;
       resetScanLookupResult();
     };
 
     const handleDetectedValue = async (value) => {
       const scanned = String(value || "").trim();
       if (!scanned) return;
+      if (isDuplicateRecentScan(scanned)) return;
 
       if (scanPurpose !== "lookup") {
+        if (scanPurpose === "loan") {
+          if (lookupBusy) return;
+          lookupBusy = true;
+          stopCamera();
+          els.scanStatus.textContent = `Kode terbaca: ${scanned}. Mencocokkan aset...`;
+          try {
+            const asset = await findAssetByCode(scanned);
+            if (!asset) {
+              els.scanStatus.textContent = "ID aset tidak ditemukan. Mencoba scan ulang...";
+              setTimeout(() => {
+                if (scanPurpose === "loan" && !lookupBusy && els.scanModal.classList.contains("active")) {
+                  startCameraScan();
+                }
+              }, 380);
+              return;
+            }
+            addLoanAsset({
+              id: asset.id,
+              asset_code: asset.asset_code,
+              name: asset.name,
+            });
+            if (els.loanAssetSearch) {
+              els.loanAssetSearch.value = "";
+            }
+            if (els.loanAssetResults) {
+              els.loanAssetResults.classList.remove("active");
+            }
+            setFlash(`Aset ${asset.asset_code} ditambahkan ke pinjaman.`, "success");
+            closeModal();
+          } catch (error) {
+            els.scanStatus.textContent = error?.message || "Gagal mencocokkan aset.";
+            setTimeout(() => {
+              if (scanPurpose === "loan" && !lookupBusy && els.scanModal.classList.contains("active")) {
+                startCameraScan();
+              }
+            }, 450);
+          } finally {
+            lookupBusy = false;
+          }
+          return;
+        }
+
         applyScannedValue(scanned);
         closeModal();
         return;
@@ -3830,7 +3901,7 @@
           ? "Arahkan kamera ke QR/Barcode ID aset."
           : "Arahkan kamera ke barcode.";
 
-      if (scanPurpose === "lookup") {
+      if (scanPurpose === "lookup" || scanPurpose === "loan") {
         const nativeStarted = await startNativeCameraScan(true);
         if (nativeStarted) {
           setCaptureButton(true, "Ambil Frame");
@@ -3984,10 +4055,10 @@
           els.scanVideo.videoWidth,
           els.scanVideo.videoHeight,
           {
-            profile: scanPurpose === "lookup" ? "live" : "fast",
-            qrOnly: scanPurpose === "lookup",
-            allowServer: scanPurpose === "lookup" ? false : true,
-            serverLimit: scanPurpose === "lookup" ? 0 : 2,
+            profile: scanPurpose === "lookup" || scanPurpose === "loan" ? "live" : "fast",
+            qrOnly: scanPurpose === "lookup" || scanPurpose === "loan",
+            allowServer: scanPurpose === "lookup" || scanPurpose === "loan" ? false : true,
+            serverLimit: scanPurpose === "lookup" || scanPurpose === "loan" ? 0 : 2,
           },
         );
         if (value) {
@@ -4053,6 +4124,15 @@
 
     els.mobileScanAsset?.addEventListener("click", () => {
       setScanPurpose("lookup");
+      activeInput = null;
+      activePhotoInput = null;
+      setMode("barcode");
+      showModal();
+      startCameraScan();
+    });
+
+    els.loanScanAsset?.addEventListener("click", () => {
+      setScanPurpose("loan");
       activeInput = null;
       activePhotoInput = null;
       setMode("barcode");
