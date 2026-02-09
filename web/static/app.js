@@ -3227,6 +3227,7 @@
     let assistAttempt = 0;
     let scanPurpose = "fill";
     let lookupBusy = false;
+    let captureBusy = false;
     let lastScanValue = "";
     let lastScanAt = 0;
 
@@ -3238,9 +3239,9 @@
     const cameraConstraintCandidates = [
       {
         video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          facingMode: { exact: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 30, max: 60 },
         },
         audio: false,
@@ -3250,6 +3251,15 @@
           facingMode: { ideal: "environment" },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
+          frameRate: { ideal: 30, max: 60 },
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           frameRate: { ideal: 24, max: 30 },
         },
         audio: false,
@@ -3284,6 +3294,15 @@
         const advanced = [];
         if (Array.isArray(caps?.focusMode) && caps.focusMode.includes("continuous")) {
           advanced.push({ focusMode: "continuous" });
+        }
+        if (Array.isArray(caps?.exposureMode) && caps.exposureMode.includes("continuous")) {
+          advanced.push({ exposureMode: "continuous" });
+        }
+        if (Array.isArray(caps?.whiteBalanceMode) && caps.whiteBalanceMode.includes("continuous")) {
+          advanced.push({ whiteBalanceMode: "continuous" });
+        }
+        if (typeof caps?.zoom?.min === "number") {
+          advanced.push({ zoom: caps.zoom.min });
         }
         if (advanced.length > 0) {
           await track.applyConstraints({ advanced });
@@ -3327,6 +3346,22 @@
         fullDetector = null;
       }
       return fullDetector;
+    };
+
+    const decodeCanvasWithJsQR = (canvas) => {
+      if (!canvas || typeof window.jsQR !== "function") return "";
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return "";
+      try {
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const result = window.jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "attemptBoth",
+        });
+        const value = String(result?.data || "").trim();
+        return value || "";
+      } catch (_) {
+        return "";
+      }
     };
 
     const buildScanCanvases = (source, width, height, options = {}) => {
@@ -3388,9 +3423,11 @@
 
       const fastVariants = variants.slice(0, 4);
       const liveVariants = [
-        variants[0],
-        variants[1],
-        { ...variants[3], anchors: [[0.5, 0.5]], upscale: 1.1 },
+        { crop: 1, upscale: 1, anchors: [[0.5, 0.5]], pad: 0.06 },
+        { crop: 1, upscale: 0.8, anchors: [[0.5, 0.5]], pad: 0.06 },
+        { crop: 1, upscale: 0.56, anchors: [[0.5, 0.5]], pad: 0.06 },
+        { crop: 0.86, upscale: 1.12, anchors: [[0.5, 0.5]], pad: 0.06 },
+        { crop: 0.72, upscale: 1.28, anchors: [[0.5, 0.5]], pad: 0.06 },
       ];
       const selectedVariants =
         profile === "live"
@@ -3398,6 +3435,7 @@
           : profile === "fast"
             ? fastVariants
             : variants;
+      const maxOutput = profile === "live" ? 1700 : 2200;
 
       const canvases = [];
       const seen = new Set();
@@ -3407,8 +3445,8 @@
         const cropH = Math.max(1, Math.round(height * variant.crop));
         const maxSX = Math.max(0, width - cropW);
         const maxSY = Math.max(0, height - cropH);
-        const outW = Math.min(2200, Math.max(360, Math.round(cropW * variant.upscale)));
-        const outH = Math.min(2200, Math.max(360, Math.round(cropH * variant.upscale)));
+        const outW = Math.min(maxOutput, Math.max(360, Math.round(cropW * variant.upscale)));
+        const outH = Math.min(maxOutput, Math.max(360, Math.round(cropH * variant.upscale)));
 
         variant.anchors.forEach(([ax, ay]) => {
           const sx = Math.max(0, Math.min(maxSX, Math.round(maxSX * ax)));
@@ -3426,9 +3464,13 @@
           const padPx = Math.max(4, Math.round(Math.min(outW, outH) * paddingRatio));
           const drawW = Math.max(1, outW - padPx * 2);
           const drawH = Math.max(1, outH - padPx * 2);
+          const downscaling = drawW < cropW || drawH < cropH;
           context.fillStyle = "#fff";
           context.fillRect(0, 0, outW, outH);
-          context.imageSmoothingEnabled = false;
+          context.imageSmoothingEnabled = downscaling;
+          if (downscaling && "imageSmoothingQuality" in context) {
+            context.imageSmoothingQuality = "high";
+          }
           context.drawImage(source, sx, sy, cropW, cropH, padPx, padPx, drawW, drawH);
           canvases.push(canvas);
         });
@@ -3440,6 +3482,7 @@
     const decodeCanvasLocal = async (canvas, options = {}) => {
       if (!canvas) return "";
       const qrOnly = Boolean(options.qrOnly);
+      const skipZXing = Boolean(options.skipZXing);
 
       const detectorCandidates = [];
       const quick = getQuickDetector();
@@ -3459,6 +3502,13 @@
         } catch (_) {
         }
       }
+
+      if (qrOnly) {
+        const qrValue = decodeCanvasWithJsQR(canvas);
+        if (qrValue) return qrValue;
+      }
+
+      if (skipZXing) return "";
 
       const reader = getCodeReader();
       if (!reader) return "";
@@ -3535,6 +3585,8 @@
     const startAssistLoop = () => {
       if (mode !== "barcode") return;
       stopAssistLoop();
+      const loopInterval =
+        scanPurpose === "lookup" ? 160 : (scanPurpose === "loan" ? 180 : 220);
       assistTimerID = window.setInterval(async () => {
         if (assistBusy) return;
         if (!els.scanModal.classList.contains("active")) return;
@@ -3555,7 +3607,8 @@
             els.scanVideo.videoHeight,
             {
               profile: "live",
-              qrOnly: scanPurpose === "lookup",
+              qrOnly: scanPurpose === "lookup" || scanPurpose === "loan",
+              skipZXing: scanPurpose === "lookup" || scanPurpose === "loan",
               allowServer: false,
               serverLimit: 0,
             },
@@ -3570,7 +3623,7 @@
         } finally {
           assistBusy = false;
         }
-      }, 380);
+      }, loopInterval);
     };
 
     const setCaptureButton = (visible, text = "Ambil Frame") => {
@@ -3970,13 +4023,6 @@
           : "Arahkan kamera ke barcode.";
 
       if (scanPurpose === "lookup" || scanPurpose === "loan") {
-        const nativeStarted = await startNativeCameraScan(true);
-        if (nativeStarted) {
-          setCaptureButton(true, "Ambil Frame");
-          startAssistLoop();
-          return;
-        }
-
         const previewStarted = await startCameraPreview();
         if (previewStarted) {
           setCaptureButton(true, "Ambil Frame");
@@ -4053,7 +4099,12 @@
           img,
           img.naturalWidth || img.width,
           img.naturalHeight || img.height,
-          { profile: "fast", allowServer: false },
+          {
+            profile: "fast",
+            qrOnly: scanPurpose === "lookup" || scanPurpose === "loan",
+            skipZXing: scanPurpose === "lookup" || scanPurpose === "loan",
+            allowServer: false,
+          },
         );
         if (value) {
           await handleDetectedValue(value);
@@ -4075,7 +4126,12 @@
           img,
           img.naturalWidth || img.width,
           img.naturalHeight || img.height,
-          { profile: "full", allowServer: false },
+          {
+            profile: "full",
+            qrOnly: scanPurpose === "lookup" || scanPurpose === "loan",
+            skipZXing: scanPurpose === "lookup" || scanPurpose === "loan",
+            allowServer: false,
+          },
         );
         if (value) {
           await handleDetectedValue(value);
@@ -4117,14 +4173,21 @@
           return;
         }
 
+        if (captureBusy) return;
+        captureBusy = true;
+        const resumeAssist = Boolean(assistTimerID);
+        if (resumeAssist) {
+          stopAssistLoop();
+        }
         els.scanStatus.textContent = "Memindai frame kamera...";
         const value = await robustDecodeFromSource(
           els.scanVideo,
           els.scanVideo.videoWidth,
           els.scanVideo.videoHeight,
           {
-            profile: scanPurpose === "lookup" || scanPurpose === "loan" ? "live" : "fast",
+            profile: "fast",
             qrOnly: scanPurpose === "lookup" || scanPurpose === "loan",
+            skipZXing: scanPurpose === "lookup" || scanPurpose === "loan",
             allowServer: scanPurpose === "lookup" ? true : (scanPurpose === "loan" ? false : true),
             serverLimit: scanPurpose === "lookup" ? 1 : (scanPurpose === "loan" ? 0 : 2),
           },
@@ -4134,9 +4197,14 @@
           return;
         }
 
-        els.scanStatus.textContent = "Barcode belum terbaca. Coba dekatkan barcode ke kamera.";
+        els.scanStatus.textContent = "Barcode belum terbaca. Coba atur jarak (jangan terlalu dekat/jauh).";
+        if (resumeAssist && mediaStream && mode === "barcode" && els.scanModal.classList.contains("active")) {
+          startAssistLoop();
+        }
       } catch (error) {
         els.scanStatus.textContent = error.message || "Kamera belum siap.";
+      } finally {
+        captureBusy = false;
       }
     });
 
