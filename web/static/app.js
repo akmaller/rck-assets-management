@@ -3460,11 +3460,6 @@
         }
       }
 
-      // Untuk mode QR-only live, hindari pipeline reader multi-format agar latensi rendah.
-      if (qrOnly && detectorCandidates.length > 0) {
-        return "";
-      }
-
       const reader = getCodeReader();
       if (!reader) return "";
       let url = "";
@@ -4090,8 +4085,8 @@
           {
             profile: scanPurpose === "lookup" || scanPurpose === "loan" ? "live" : "fast",
             qrOnly: scanPurpose === "lookup" || scanPurpose === "loan",
-            allowServer: scanPurpose === "lookup" || scanPurpose === "loan" ? false : true,
-            serverLimit: scanPurpose === "lookup" || scanPurpose === "loan" ? 0 : 2,
+            allowServer: scanPurpose === "lookup" ? true : (scanPurpose === "loan" ? false : true),
+            serverLimit: scanPurpose === "lookup" ? 1 : (scanPurpose === "loan" ? 0 : 2),
           },
         );
         if (value) {
