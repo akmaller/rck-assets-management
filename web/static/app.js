@@ -3225,6 +3225,9 @@
     let assistTimerID = 0;
     let assistBusy = false;
     let assistAttempt = 0;
+    let assistStartedAt = 0;
+    let assistNextServerAt = 0;
+    let assistServerBusy = false;
     let scanPurpose = "fill";
     let lookupBusy = false;
     let captureBusy = false;
@@ -3573,6 +3576,30 @@
       return "";
     };
 
+    const captureScanFrameCanvas = (maxEdge = 1280) => {
+      if (!els.scanVideo || els.scanVideo.readyState < 2) return null;
+      const srcW = Number(els.scanVideo.videoWidth || 0);
+      const srcH = Number(els.scanVideo.videoHeight || 0);
+      if (!srcW || !srcH) return null;
+
+      const longest = Math.max(srcW, srcH);
+      const scale = longest > maxEdge ? maxEdge / longest : 1;
+      const outW = Math.max(1, Math.round(srcW * scale));
+      const outH = Math.max(1, Math.round(srcH * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.imageSmoothingEnabled = true;
+      if ("imageSmoothingQuality" in context) {
+        context.imageSmoothingQuality = "high";
+      }
+      context.drawImage(els.scanVideo, 0, 0, srcW, srcH, 0, 0, outW, outH);
+      return canvas;
+    };
+
     const stopAssistLoop = () => {
       if (assistTimerID) {
         clearInterval(assistTimerID);
@@ -3580,6 +3607,9 @@
       }
       assistBusy = false;
       assistAttempt = 0;
+      assistStartedAt = 0;
+      assistNextServerAt = 0;
+      assistServerBusy = false;
     };
 
     const startAssistLoop = () => {
@@ -3587,6 +3617,8 @@
       stopAssistLoop();
       const loopInterval =
         scanPurpose === "lookup" ? 160 : (scanPurpose === "loan" ? 180 : 220);
+      assistStartedAt = Date.now();
+      assistNextServerAt = assistStartedAt + (scanPurpose === "lookup" ? 2200 : 2800);
       assistTimerID = window.setInterval(async () => {
         if (assistBusy) return;
         if (!els.scanModal.classList.contains("active")) return;
@@ -3617,8 +3649,36 @@
             await handleDetectedValue(value);
             return;
           }
-          if (assistAttempt % 2 === 0) {
-            els.scanStatus.textContent = "Belum terbaca. Coba sesuaikan jarak kamera (terlalu dekat juga bisa gagal).";
+
+          const now = Date.now();
+          if (scanPurpose === "lookup" && now >= assistNextServerAt && !assistServerBusy) {
+            assistServerBusy = true;
+            try {
+              const frameCanvas = captureScanFrameCanvas(1280);
+              if (frameCanvas) {
+                const serverValue = await decodeCanvasServer(frameCanvas);
+                if (serverValue) {
+                  await handleDetectedValue(serverValue);
+                  return;
+                }
+              }
+            } catch (_) {
+            } finally {
+              assistServerBusy = false;
+              assistNextServerAt = Date.now() + 2600;
+            }
+          }
+
+          const elapsed = now - assistStartedAt;
+          if (elapsed < 2200) {
+            if (assistAttempt % 8 === 0) {
+              els.scanStatus.textContent = "Kamera aktif. Menyesuaikan fokus, tahan posisi sebentar...";
+            }
+            return;
+          }
+
+          if (assistAttempt % 4 === 0) {
+            els.scanStatus.textContent = "Belum terbaca. Coba sesuaikan jarak dan pencahayaan.";
           }
         } finally {
           assistBusy = false;
@@ -4027,7 +4087,7 @@
         if (previewStarted) {
           setCaptureButton(true, "Ambil Frame");
           startAssistLoop();
-          els.scanStatus.textContent = "Kamera aktif. Mode QR-only berjalan.";
+          els.scanStatus.textContent = "Kamera aktif. Menyesuaikan fokus kamera...";
           return;
         }
 
