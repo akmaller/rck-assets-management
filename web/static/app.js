@@ -3681,6 +3681,33 @@
       els.scanLookupResult.innerHTML = "";
     };
 
+    const formatScanDate = (raw, withTime = false) => {
+      const value = String(raw || "").trim();
+      if (!value) return "-";
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [year, month, day] = value.split("-");
+        return `${day}-${month}-${year}`;
+      }
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      const options = withTime
+        ? {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }
+        : {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          };
+      return new Intl.DateTimeFormat("id-ID", options).format(date);
+    };
+
     const renderScanLookupResult = (asset, scannedCode) => {
       if (!els.scanLookupResult) return;
       const normalizedCode = normalizeAssetCode(scannedCode);
@@ -3694,13 +3721,26 @@
         return;
       }
 
+      const photoURL = String(asset.photo_thumb_url || asset.photo_url || "").trim();
+      const photoHTML = photoURL
+        ? `<img class="scan-lookup-photo" src="${escapeHtml(photoURL)}" alt="Foto ${escapeHtml(asset.asset_code || normalizedCode)}">`
+        : `<div class="scan-lookup-photo placeholder" aria-hidden="true"></div>`;
+
       els.scanLookupResult.hidden = false;
       els.scanLookupResult.innerHTML = `
-        <strong>Aset ditemukan</strong>
-        <div class="scan-lookup-code">${escapeHtml(asset.asset_code || normalizedCode)}</div>
-        <div class="scan-lookup-meta">${escapeHtml(asset.name || "-")}</div>
+        <div class="scan-lookup-head">
+          ${photoHTML}
+          <div class="scan-lookup-main">
+            <strong>Aset ditemukan</strong>
+            <div class="scan-lookup-code">${escapeHtml(asset.asset_code || normalizedCode)}</div>
+            <div class="scan-lookup-meta">${escapeHtml(asset.name || "-")}</div>
+          </div>
+        </div>
         <div class="scan-lookup-meta">Jenis: ${escapeHtml(asset.asset_type_name || "-")} | Kondisi: ${escapeHtml(asset.condition || asset.asset_condition || "-")}</div>
         <div class="scan-lookup-meta">Status: ${escapeHtml(asset.loan_status || "Ada")}</div>
+        <div class="scan-lookup-meta">Tanggal pembelian: ${escapeHtml(formatScanDate(asset.purchase_date, false))}</div>
+        <div class="scan-lookup-meta">Tanggal perekaman: ${escapeHtml(formatScanDate(asset.created_at, true))}</div>
+        <div class="scan-lookup-meta">Tanggal update: ${escapeHtml(formatScanDate(asset.updated_at, true))}</div>
       `;
     };
 
