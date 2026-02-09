@@ -3170,6 +3170,7 @@
       "qr_code",
       "data_matrix",
     ];
+    const quickLiveFormats = ["qr_code"];
     const getCodeReader = () => {
       if (codeReader) return codeReader;
       const ZXingBrowser = window.ZXingBrowser;
@@ -3185,6 +3186,8 @@
     let mediaStream = null;
     let detectFrameID = 0;
     let nativeDetector = null;
+    let quickDetector = null;
+    let fullDetector = null;
     let assistTimerID = 0;
     let assistBusy = false;
     let assistAttempt = 0;
@@ -3200,8 +3203,8 @@
       {
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           frameRate: { ideal: 30, max: 60 },
         },
         audio: false,
@@ -3209,8 +3212,8 @@
       {
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 24, max: 30 },
         },
         audio: false,
@@ -3268,9 +3271,35 @@
         );
       });
 
+    const getQuickDetector = () => {
+      if (!("BarcodeDetector" in window)) return null;
+      if (quickDetector) return quickDetector;
+      try {
+        quickDetector = new window.BarcodeDetector({ formats: quickLiveFormats });
+      } catch (_) {
+        quickDetector = null;
+      }
+      return quickDetector;
+    };
+
+    const getFullDetector = () => {
+      if (!("BarcodeDetector" in window)) return null;
+      if (fullDetector) return fullDetector;
+      try {
+        fullDetector = new window.BarcodeDetector({ formats: barcodeFormats });
+      } catch (_) {
+        fullDetector = null;
+      }
+      return fullDetector;
+    };
+
     const buildScanCanvases = (source, width, height, options = {}) => {
       if (!source || !width || !height) return [];
-      const profile = options.profile === "fast" ? "fast" : "full";
+      const profile = options.profile === "live"
+        ? "live"
+        : options.profile === "fast"
+          ? "fast"
+          : "full";
 
       const variants = [
         {
@@ -3322,7 +3351,17 @@
       ];
 
       const fastVariants = variants.slice(0, 4);
-      const selectedVariants = profile === "fast" ? fastVariants : variants;
+      const liveVariants = [
+        variants[0],
+        variants[1],
+        { ...variants[3], anchors: [[0.5, 0.5]], upscale: 1.1 },
+      ];
+      const selectedVariants =
+        profile === "live"
+          ? liveVariants
+          : profile === "fast"
+            ? fastVariants
+            : variants;
 
       const canvases = [];
       const seen = new Set();
@@ -3362,12 +3401,20 @@
       return canvases;
     };
 
-    const decodeCanvasLocal = async (canvas) => {
+    const decodeCanvasLocal = async (canvas, options = {}) => {
       if (!canvas) return "";
+      const qrOnly = Boolean(options.qrOnly);
 
-      if ("BarcodeDetector" in window) {
+      const detectorCandidates = [];
+      const quick = getQuickDetector();
+      if (quick && !detectorCandidates.includes(quick)) detectorCandidates.push(quick);
+      if (nativeDetector && !detectorCandidates.includes(nativeDetector)) detectorCandidates.push(nativeDetector);
+      if (!qrOnly) {
+        const full = getFullDetector();
+        if (full && !detectorCandidates.includes(full)) detectorCandidates.push(full);
+      }
+      for (const detector of detectorCandidates) {
         try {
-          const detector = nativeDetector || new window.BarcodeDetector({ formats: barcodeFormats });
           const results = await detector.detect(canvas);
           if (results.length > 0) {
             const value = String(results[0].rawValue || "").trim();
@@ -3375,6 +3422,11 @@
           }
         } catch (_) {
         }
+      }
+
+      // Untuk mode QR-only live, hindari pipeline reader multi-format agar latensi rendah.
+      if (qrOnly && detectorCandidates.length > 0) {
+        return "";
       }
 
       const reader = getCodeReader();
@@ -3414,7 +3466,7 @@
       let serverTried = 0;
 
       for (const canvas of canvases) {
-        const localValue = await decodeCanvasLocal(canvas);
+        const localValue = await decodeCanvasLocal(canvas, options);
         if (localValue) return localValue;
 
         if (allowServer && serverTried < serverLimit) {
@@ -3422,6 +3474,20 @@
           serverTried += 1;
           if (serverValue) return serverValue;
         }
+      }
+      return "";
+    };
+
+    const detectLiveQuick = async () => {
+      if (!els.scanVideo || els.scanVideo.readyState < 2) return "";
+      const detector = nativeDetector || getQuickDetector();
+      if (!detector) return "";
+      try {
+        const results = await detector.detect(els.scanVideo);
+        if (results.length > 0) {
+          return String(results[0].rawValue || "").trim();
+        }
+      } catch (_) {
       }
       return "";
     };
@@ -3447,14 +3513,20 @@
         assistBusy = true;
         try {
           assistAttempt += 1;
+          const quickValue = await detectLiveQuick();
+          if (quickValue) {
+            await handleDetectedValue(quickValue);
+            return;
+          }
           const value = await robustDecodeFromSource(
             els.scanVideo,
             els.scanVideo.videoWidth,
             els.scanVideo.videoHeight,
             {
-              profile: "fast",
-              allowServer: assistAttempt % 4 === 0,
-              serverLimit: 1,
+              profile: "live",
+              qrOnly: scanPurpose === "lookup",
+              allowServer: false,
+              serverLimit: 0,
             },
           );
           if (value) {
@@ -3467,7 +3539,7 @@
         } finally {
           assistBusy = false;
         }
-      }, 750);
+      }, 380);
     };
 
     const setCaptureButton = (visible, text = "Ambil Frame") => {
@@ -3687,12 +3759,12 @@
       }
     };
 
-    const startNativeCameraScan = async () => {
+    const startNativeCameraScan = async (qrOnly = false) => {
       if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
         return false;
       }
       try {
-        nativeDetector = new window.BarcodeDetector({ formats: barcodeFormats });
+        nativeDetector = new window.BarcodeDetector({ formats: qrOnly ? quickLiveFormats : barcodeFormats });
       } catch (_) {
         nativeDetector = null;
         return false;
@@ -3757,6 +3829,26 @@
         scanPurpose === "lookup"
           ? "Arahkan kamera ke QR/Barcode ID aset."
           : "Arahkan kamera ke barcode.";
+
+      if (scanPurpose === "lookup") {
+        const nativeStarted = await startNativeCameraScan(true);
+        if (nativeStarted) {
+          setCaptureButton(true, "Ambil Frame");
+          startAssistLoop();
+          return;
+        }
+
+        const previewStarted = await startCameraPreview();
+        if (previewStarted) {
+          setCaptureButton(true, "Ambil Frame");
+          startAssistLoop();
+          els.scanStatus.textContent = "Kamera aktif. Mode QR-only berjalan.";
+          return;
+        }
+
+        els.scanStatus.textContent = "Kamera tidak tersedia atau izin ditolak. Gunakan upload foto.";
+        return;
+      }
 
       const reader = getCodeReader();
       if (reader) {
@@ -3891,7 +3983,12 @@
           els.scanVideo,
           els.scanVideo.videoWidth,
           els.scanVideo.videoHeight,
-          { allowServer: true, serverLimit: 2 },
+          {
+            profile: scanPurpose === "lookup" ? "live" : "fast",
+            qrOnly: scanPurpose === "lookup",
+            allowServer: scanPurpose === "lookup" ? false : true,
+            serverLimit: scanPurpose === "lookup" ? 0 : 2,
+          },
         );
         if (value) {
           await handleDetectedValue(value);
