@@ -96,7 +96,7 @@ func securityHeaders(next stdhttp.Handler) stdhttp.Handler {
 		}
 		w.Header().Set(
 			"Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://fastly.jsdelivr.net; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+			"default-src 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'wasm-unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://fastly.jsdelivr.net; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 		)
 		next.ServeHTTP(w, r)
 	})
