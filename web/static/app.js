@@ -3205,6 +3205,7 @@
       "data_matrix",
     ];
     const quickLiveFormats = ["qr_code"];
+    const wasmQRCodeFormats = ["QRCode"];
     const getCodeReader = () => {
       if (codeReader) return codeReader;
       const ZXingBrowser = window.ZXingBrowser;
@@ -3226,11 +3227,15 @@
     let assistBusy = false;
     let assistAttempt = 0;
     let assistStartedAt = 0;
+    let assistNextWasmAt = 0;
     let assistNextServerAt = 0;
     let assistServerBusy = false;
     let scanPurpose = "fill";
     let lookupBusy = false;
     let captureBusy = false;
+    let wasmReaderReady = false;
+    let wasmReaderFailed = false;
+    let wasmReaderPromise = null;
     let lastScanValue = "";
     let lastScanAt = 0;
 
@@ -3349,6 +3354,67 @@
         fullDetector = null;
       }
       return fullDetector;
+    };
+
+    const canUseWasmReader = () =>
+      Boolean(
+        window.ZXingWASM &&
+        typeof window.ZXingWASM.readBarcodesFromImageData === "function",
+      );
+
+    const prepareWasmReader = async () => {
+      if (wasmReaderReady) return true;
+      if (wasmReaderFailed) return false;
+      if (!canUseWasmReader()) return false;
+      if (!wasmReaderPromise) {
+        wasmReaderPromise = (async () => {
+          try {
+            if (typeof window.ZXingWASM.prepareZXingModule === "function") {
+              await window.ZXingWASM.prepareZXingModule();
+            }
+            wasmReaderReady = true;
+            return true;
+          } catch (_) {
+            wasmReaderFailed = true;
+            return false;
+          }
+        })();
+      }
+      return wasmReaderPromise;
+    };
+
+    const decodeCanvasWithWasm = async (canvas, options = {}) => {
+      if (!canvas) return "";
+      const ready = await prepareWasmReader();
+      if (!ready || !canUseWasmReader()) return "";
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return "";
+      let imageData;
+      try {
+        imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      } catch (_) {
+        return "";
+      }
+
+      const decodeOptions = {
+        maxNumberOfSymbols: 1,
+        tryHarder: true,
+        tryRotate: true,
+        tryInvert: true,
+        tryDownscale: true,
+      };
+      if (options.qrOnly !== false) {
+        decodeOptions.formats = wasmQRCodeFormats;
+      }
+
+      try {
+        const results = await window.ZXingWASM.readBarcodesFromImageData(imageData, decodeOptions);
+        if (!Array.isArray(results) || results.length === 0) return "";
+        const value = String(results[0]?.text || "").trim();
+        return value || "";
+      } catch (_) {
+        return "";
+      }
     };
 
     const decodeCanvasWithJsQR = (canvas) => {
@@ -3608,6 +3674,7 @@
       assistBusy = false;
       assistAttempt = 0;
       assistStartedAt = 0;
+      assistNextWasmAt = 0;
       assistNextServerAt = 0;
       assistServerBusy = false;
     };
@@ -3618,6 +3685,7 @@
       const loopInterval =
         scanPurpose === "lookup" ? 160 : (scanPurpose === "loan" ? 180 : 220);
       assistStartedAt = Date.now();
+      assistNextWasmAt = assistStartedAt + (scanPurpose === "lookup" ? 900 : 1200);
       assistNextServerAt = assistStartedAt + (scanPurpose === "lookup" ? 2200 : 2800);
       assistTimerID = window.setInterval(async () => {
         if (assistBusy) return;
@@ -3650,7 +3718,24 @@
             return;
           }
 
-          const now = Date.now();
+          let now = Date.now();
+          if ((scanPurpose === "lookup" || scanPurpose === "loan") && now >= assistNextWasmAt) {
+            try {
+              const frameCanvas = captureScanFrameCanvas(1480);
+              if (frameCanvas) {
+                const wasmValue = await decodeCanvasWithWasm(frameCanvas, { qrOnly: true });
+                if (wasmValue) {
+                  await handleDetectedValue(wasmValue);
+                  return;
+                }
+              }
+            } catch (_) {
+            } finally {
+              assistNextWasmAt = Date.now() + (scanPurpose === "lookup" ? 850 : 1100);
+            }
+            now = Date.now();
+          }
+
           if (scanPurpose === "lookup" && now >= assistNextServerAt && !assistServerBusy) {
             assistServerBusy = true;
             try {
@@ -4083,6 +4168,7 @@
           : "Arahkan kamera ke barcode.";
 
       if (scanPurpose === "lookup" || scanPurpose === "loan") {
+        prepareWasmReader().catch(() => {});
         const previewStarted = await startCameraPreview();
         if (previewStarted) {
           setCaptureButton(true, "Ambil Frame");
@@ -4154,8 +4240,34 @@
         img.src = url;
         await img.decode();
 
+        let value = "";
+        if (scanPurpose === "lookup" || scanPurpose === "loan") {
+          const srcW = Number(img.naturalWidth || img.width || 0);
+          const srcH = Number(img.naturalHeight || img.height || 0);
+          if (srcW > 0 && srcH > 0) {
+            const longest = Math.max(srcW, srcH);
+            const scale = longest > 1800 ? 1800 / longest : 1;
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(srcW * scale));
+            canvas.height = Math.max(1, Math.round(srcH * scale));
+            const context = canvas.getContext("2d");
+            if (context) {
+              context.imageSmoothingEnabled = true;
+              if ("imageSmoothingQuality" in context) {
+                context.imageSmoothingQuality = "high";
+              }
+              context.drawImage(img, 0, 0, srcW, srcH, 0, 0, canvas.width, canvas.height);
+              value = await decodeCanvasWithWasm(canvas, { qrOnly: true });
+              if (value) {
+                await handleDetectedValue(value);
+                return;
+              }
+            }
+          }
+        }
+
         // Local decode lebih cepat daripada upload network.
-        let value = await robustDecodeFromSource(
+        value = await robustDecodeFromSource(
           img,
           img.naturalWidth || img.width,
           img.naturalHeight || img.height,
@@ -4240,6 +4352,16 @@
           stopAssistLoop();
         }
         els.scanStatus.textContent = "Memindai frame kamera...";
+        if (scanPurpose === "lookup" || scanPurpose === "loan") {
+          const frameCanvas = captureScanFrameCanvas(1600);
+          if (frameCanvas) {
+            const wasmValue = await decodeCanvasWithWasm(frameCanvas, { qrOnly: true });
+            if (wasmValue) {
+              await handleDetectedValue(wasmValue);
+              return;
+            }
+          }
+        }
         const value = await robustDecodeFromSource(
           els.scanVideo,
           els.scanVideo.videoWidth,
