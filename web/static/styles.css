@@ -179,6 +179,21 @@ label {
   font-size: 0.85rem;
 }
 
+.photo-inline-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.photo-thumb-preview {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--gray-300);
+  object-fit: cover;
+  background: #f1f1ed;
+}
+
 .file-input-hidden {
   position: absolute;
   width: 1px;

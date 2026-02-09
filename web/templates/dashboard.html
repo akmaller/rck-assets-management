@@ -106,7 +106,10 @@
           <label>
             <span class="label-row"><span class="label-text">Foto Aset</span><span class="label-optional">Opsional</span></span>
             <input class="file-input-hidden" type="file" name="photo" accept="image/*">
-            <button type="button" class="btn btn-outline photo-btn" data-photo-target="quick">Ambil Foto</button>
+            <div class="photo-inline-row">
+              <button type="button" class="btn btn-outline photo-btn" data-photo-target="quick">Ambil Foto</button>
+              <img id="quick-photo-thumb" class="photo-thumb-preview" src="" alt="Preview foto aset" hidden>
+            </div>
           </label>
           <div class="inline-actions full-width">
             <button type="submit" class="btn btn-primary">Tambah Aset</button>

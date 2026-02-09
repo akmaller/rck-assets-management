@@ -73,6 +73,7 @@
     companyMediaCancel: document.getElementById("company-media-cancel"),
     companyMediaApply: document.getElementById("company-media-apply"),
     quickAssetForm: document.getElementById("quick-asset-form"),
+    quickPhotoThumb: document.getElementById("quick-photo-thumb"),
     typeForm: document.getElementById("type-form"),
     typeSubmit: document.getElementById("type-submit"),
     typeCancel: document.getElementById("type-cancel"),
@@ -2808,6 +2809,37 @@
 
   const setupQuickAssetForm = () => {
     if (!els.quickAssetForm) return;
+    let quickPhotoObjectURL = "";
+
+    const resetQuickPhotoThumb = () => {
+      if (!els.quickPhotoThumb) return;
+      if (quickPhotoObjectURL) {
+        URL.revokeObjectURL(quickPhotoObjectURL);
+        quickPhotoObjectURL = "";
+      }
+      els.quickPhotoThumb.src = "";
+      els.quickPhotoThumb.hidden = true;
+    };
+
+    const updateQuickPhotoThumb = (file) => {
+      if (!els.quickPhotoThumb) return;
+      if (!file) {
+        resetQuickPhotoThumb();
+        return;
+      }
+      if (quickPhotoObjectURL) {
+        URL.revokeObjectURL(quickPhotoObjectURL);
+      }
+      quickPhotoObjectURL = URL.createObjectURL(file);
+      els.quickPhotoThumb.src = quickPhotoObjectURL;
+      els.quickPhotoThumb.hidden = false;
+    };
+
+    els.quickAssetForm.photo?.addEventListener("change", () => {
+      updateQuickPhotoThumb(els.quickAssetForm?.photo?.files?.[0]);
+    });
+    resetQuickPhotoThumb();
+
     els.quickAssetForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const payload = {
@@ -2832,6 +2864,7 @@
         }
         setFlash(data.message || "Aset berhasil ditambahkan.", "success");
         els.quickAssetForm.reset();
+        resetQuickPhotoThumb();
         if (els.quickAssetForm.condition) {
           els.quickAssetForm.condition.value = "Baik";
         }
